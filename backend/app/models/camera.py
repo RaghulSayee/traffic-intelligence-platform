@@ -88,8 +88,10 @@ class Camera(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     videos: Mapped[list[Video]] = relationship(
         back_populates="camera",
+        passive_deletes=True,
     )
 
     violation_events: Mapped[list[ViolationEvent]] = relationship(
         back_populates="camera",
+        passive_deletes=True,
     )
