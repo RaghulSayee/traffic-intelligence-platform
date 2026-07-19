@@ -13,6 +13,15 @@ from app.pipelines.yolo_traffic import (
 from app.tracking.multi_object import (
     MultiObjectTracker,
 )
+from app.reasoning.rider_motorcycle import (
+    RiderMotorcycleAssociator,
+)
+from app.reasoning.temporal_rider import (
+    TemporalRiderAssociationSmoother,
+)
+from app.reasoning.triple_riding import (
+    TripleRidingViolationDetector,
+)
 
 
 class VideoPipelineFactory:
@@ -46,16 +55,14 @@ class VideoPipelineFactory:
     def _create_yolo_pipeline(
         self,
     ) -> YoloTrafficPipeline:
-        """
-        Create one stateful pipeline and tracker per video job.
-
-        The detector is reused, but tracker state must never be
-        shared between two videos.
-        """
+        """Create fresh stateful components for one video."""
 
         return YoloTrafficPipeline(
             detector=self._get_traffic_detector(),
             tracker=self._create_tracker(),
+            rider_associator=(self._create_rider_associator()),
+            rider_smoother=(self._create_rider_smoother()),
+            triple_riding_detector=(self._create_triple_riding_detector()),
             frame_stride=(self.settings.detector_frame_stride),
         )
 
@@ -89,4 +96,45 @@ class VideoPipelineFactory:
             maximum_missed_frames=(self.settings.tracker_max_missed_frames),
             process_noise=(self.settings.tracker_process_noise),
             measurement_noise=(self.settings.tracker_measurement_noise),
+        )
+
+    def _create_rider_associator(
+        self,
+    ) -> RiderMotorcycleAssociator:
+        """Create frame-level relationship reasoning."""
+
+        return RiderMotorcycleAssociator(
+            minimum_score=(self.settings.rider_association_minimum_score),
+            max_riders_per_motorcycle=(
+                self.settings.rider_association_max_riders_per_motorcycle
+            ),
+            max_anchor_distance_ratio=(
+                self.settings.rider_association_max_anchor_distance_ratio
+            ),
+            minimum_horizontal_overlap=(
+                self.settings.rider_association_minimum_horizontal_overlap
+            ),
+            minimum_motion_speed=(self.settings.rider_association_minimum_motion_speed),
+        )
+
+    def _create_rider_smoother(
+        self,
+    ) -> TemporalRiderAssociationSmoother:
+        """Create temporal relationship memory."""
+
+        return TemporalRiderAssociationSmoother(
+            confirmation_frames=(self.settings.rider_temporal_confirmation_frames),
+            maximum_missed_frames=(self.settings.rider_temporal_max_missed_frames),
+            score_alpha=(self.settings.rider_temporal_score_alpha),
+        )
+
+    def _create_triple_riding_detector(
+        self,
+    ) -> TripleRidingViolationDetector:
+        """Create triple-riding lifecycle state."""
+
+        return TripleRidingViolationDetector(
+            minimum_riders=(self.settings.triple_riding_minimum_riders),
+            confirmation_frames=(self.settings.triple_riding_confirmation_frames),
+            maximum_missed_frames=(self.settings.triple_riding_maximum_missed_frames),
         )

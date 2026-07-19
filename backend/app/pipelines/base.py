@@ -8,6 +8,13 @@ from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from app.detection.types import Detection
+    from app.reasoning.temporal_rider import (
+        TemporalRiderAssociation,
+    )
+    from app.reasoning.triple_riding import (
+        TripleRidingTransition,
+        TripleRidingViolationSnapshot,
+    )
     from app.tracking.types import TrackedObject
 
 
@@ -45,6 +52,21 @@ class FrameAnalysis:
     detections: tuple[Detection, ...] = ()
 
     tracks: tuple[TrackedObject, ...] = ()
+
+    rider_associations: tuple[
+        TemporalRiderAssociation,
+        ...,
+    ] = ()
+
+    triple_riding_states: tuple[
+        TripleRidingViolationSnapshot,
+        ...,
+    ] = ()
+
+    triple_riding_transitions: tuple[
+        TripleRidingTransition,
+        ...,
+    ] = ()
 
     annotated_frame: VideoFrame | None = None
 
