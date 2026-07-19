@@ -48,10 +48,7 @@ class ViolationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="rule_confidence_range",
         ),
         CheckConstraint(
-            (
-                "ocr_confidence IS NULL OR "
-                "(ocr_confidence >= 0 AND ocr_confidence <= 1)"
-            ),
+            ("ocr_confidence IS NULL OR (ocr_confidence >= 0 AND ocr_confidence <= 1)"),
             name="ocr_confidence_range",
         ),
         Index(
@@ -99,9 +96,7 @@ class ViolationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             ViolationType,
             name="violation_type",
             native_enum=False,
-            values_callable=lambda members: [
-                member.value for member in members
-            ],
+            values_callable=lambda members: [member.value for member in members],
         ),
         nullable=False,
         index=True,
@@ -112,9 +107,7 @@ class ViolationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             ReviewStatus,
             name="review_status",
             native_enum=False,
-            values_callable=lambda members: [
-                member.value for member in members
-            ],
+            values_callable=lambda members: [member.value for member in members],
         ),
         nullable=False,
         default=ReviewStatus.PENDING,

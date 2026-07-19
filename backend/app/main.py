@@ -23,9 +23,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description=(
-        "Backend API for the intelligent traffic-violation platform."
-    ),
+    description=("Backend API for the intelligent traffic-violation platform."),
     lifespan=lifespan,
 )
 

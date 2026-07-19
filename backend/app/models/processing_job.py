@@ -35,6 +35,10 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "progress_percent >= 0 AND progress_percent <= 100",
             name="progress_percent_range",
         ),
+        CheckConstraint(
+            "last_processed_frame >= 0",
+            name="last_processed_frame_non_negative",
+        ),
     )
 
     video_id: Mapped[UUID] = mapped_column(
@@ -51,9 +55,7 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             ProcessingJobStatus,
             name="processing_job_status",
             native_enum=False,
-            values_callable=lambda members: [
-                member.value for member in members
-            ],
+            values_callable=lambda members: [member.value for member in members],
         ),
         nullable=False,
         default=ProcessingJobStatus.QUEUED,
@@ -76,6 +78,34 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Integer,
         nullable=False,
         default=0,
+    )
+
+    last_processed_frame: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    worker_id: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
     )
 
     pipeline_name: Mapped[str] = mapped_column(

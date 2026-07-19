@@ -28,9 +28,7 @@ def validate_camera_stream_url(value: str | None) -> str | None:
     )
 
     if not normalized_value.startswith(supported_protocols):
-        raise ValueError(
-            "Stream URL must use RTSP, RTSPS, HTTP or HTTPS."
-        )
+        raise ValueError("Stream URL must use RTSP, RTSPS, HTTP or HTTPS.")
 
     return normalized_value
 

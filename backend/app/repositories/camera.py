@@ -35,9 +35,7 @@ class CameraRepository:
     ) -> Camera | None:
         """Retrieve a camera using its unique name."""
 
-        statement = select(Camera).where(
-            Camera.name == name
-        )
+        statement = select(Camera).where(Camera.name == name)
 
         result = await self.session.execute(statement)
 
@@ -55,13 +53,10 @@ class CameraRepository:
         statement = select(Camera)
 
         if camera_status is not None:
-            statement = statement.where(
-                Camera.status == camera_status
-            )
+            statement = statement.where(Camera.status == camera_status)
 
         statement = (
-            statement
-            .order_by(
+            statement.order_by(
                 Camera.created_at.desc(),
                 Camera.id,
             )
@@ -80,15 +75,10 @@ class CameraRepository:
     ) -> int:
         """Count cameras matching an optional status filter."""
 
-        statement = (
-            select(func.count())
-            .select_from(Camera)
-        )
+        statement = select(func.count()).select_from(Camera)
 
         if camera_status is not None:
-            statement = statement.where(
-                Camera.status == camera_status
-            )
+            statement = statement.where(Camera.status == camera_status)
 
         result = await self.session.execute(statement)
 
