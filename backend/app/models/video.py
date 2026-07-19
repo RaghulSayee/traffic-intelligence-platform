@@ -51,9 +51,7 @@ class Video(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             VideoSourceType,
             name="video_source_type",
             native_enum=False,
-            values_callable=lambda members: [
-                member.value for member in members
-            ],
+            values_callable=lambda members: [member.value for member in members],
         ),
         nullable=False,
         default=VideoSourceType.UPLOAD,
@@ -64,9 +62,7 @@ class Video(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             VideoStatus,
             name="video_status",
             native_enum=False,
-            values_callable=lambda members: [
-                member.value for member in members
-            ],
+            values_callable=lambda members: [member.value for member in members],
         ),
         nullable=False,
         default=VideoStatus.UPLOADED,
@@ -106,7 +102,7 @@ class Video(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     checksum_sha256: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
-        index=True,
+        unique=True,
     )
 
     video_metadata: Mapped[dict[str, Any]] = mapped_column(

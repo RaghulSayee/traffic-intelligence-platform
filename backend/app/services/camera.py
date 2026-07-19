@@ -26,16 +26,12 @@ class CameraService:
     ) -> Camera:
         """Register a new traffic camera."""
 
-        existing_camera = await self.repository.get_by_name(
-            payload.name
-        )
+        existing_camera = await self.repository.get_by_name(payload.name)
 
         if existing_camera is not None:
             raise CameraNameConflictError(payload.name)
 
-        camera = Camera(
-            **payload.model_dump()
-        )
+        camera = Camera(**payload.model_dump())
 
         try:
             await self.repository.create(camera)
@@ -43,9 +39,7 @@ class CameraService:
         except IntegrityError as exc:
             await self.session.rollback()
 
-            raise CameraNameConflictError(
-                payload.name
-            ) from exc
+            raise CameraNameConflictError(payload.name) from exc
 
         await self.session.refresh(camera)
 
@@ -94,32 +88,18 @@ class CameraService:
 
         camera = await self.get_camera(camera_id)
 
-        update_data = payload.model_dump(
-            exclude_unset=True
-        )
+        update_data = payload.model_dump(exclude_unset=True)
 
         if not update_data:
             return camera
 
         requested_name = update_data.get("name")
 
-        if (
-            requested_name is not None
-            and requested_name != camera.name
-        ):
-            existing_camera = (
-                await self.repository.get_by_name(
-                    requested_name
-                )
-            )
+        if requested_name is not None and requested_name != camera.name:
+            existing_camera = await self.repository.get_by_name(requested_name)
 
-            if (
-                existing_camera is not None
-                and existing_camera.id != camera.id
-            ):
-                raise CameraNameConflictError(
-                    requested_name
-                )
+            if existing_camera is not None and existing_camera.id != camera.id:
+                raise CameraNameConflictError(requested_name)
 
         non_nullable_fields = {
             "name",
@@ -128,13 +108,8 @@ class CameraService:
         }
 
         for field_name in non_nullable_fields:
-            if (
-                field_name in update_data
-                and update_data[field_name] is None
-            ):
-                raise ValueError(
-                    f"'{field_name}' cannot be null."
-                )
+            if field_name in update_data and update_data[field_name] is None:
+                raise ValueError(f"'{field_name}' cannot be null.")
 
         for field_name, value in update_data.items():
             setattr(camera, field_name, value)
@@ -145,14 +120,10 @@ class CameraService:
             await self.session.rollback()
 
             conflicting_name = (
-                requested_name
-                if requested_name is not None
-                else camera.name
+                requested_name if requested_name is not None else camera.name
             )
 
-            raise CameraNameConflictError(
-                conflicting_name
-            ) from exc
+            raise CameraNameConflictError(conflicting_name) from exc
 
         await self.session.refresh(camera)
 

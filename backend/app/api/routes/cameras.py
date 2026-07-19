@@ -78,10 +78,7 @@ async def list_cameras(
     )
 
     return CameraListResponse(
-        items=[
-            CameraRead.model_validate(camera)
-            for camera in cameras
-        ],
+        items=[CameraRead.model_validate(camera) for camera in cameras],
         total=total,
         offset=offset,
         limit=limit,
@@ -162,6 +159,4 @@ async def delete_camera(
             detail=str(exc),
         ) from exc
 
-    return Response(
-        status_code=http_status.HTTP_204_NO_CONTENT
-    )
+    return Response(status_code=http_status.HTTP_204_NO_CONTENT)

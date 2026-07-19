@@ -46,9 +46,7 @@ class Camera(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             CameraStatus,
             name="camera_status",
             native_enum=False,
-            values_callable=lambda members: [
-                member.value for member in members
-            ],
+            values_callable=lambda members: [member.value for member in members],
         ),
         nullable=False,
         default=CameraStatus.INACTIVE,

@@ -1,0 +1,15 @@
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Local environment variables
+.env
+
+# Uploaded and generated videos
+backend/storage/
+backend/sample_traffic*.avi
