@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     worker_max_attempts: int = 3
     worker_recovery_batch_size: int = 20
 
+    detector_model_path: str = "yolo26n.pt"
+    detector_device: str = "auto"
+    detector_confidence_threshold: float = 0.35
+    detector_iou_threshold: float = 0.50
+    detector_image_size: int = 640
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

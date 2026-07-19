@@ -1,15 +1,55 @@
+# macOS
+.DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+env/
 
 # Python generated files
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Testing and code-quality caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.venv/
+.coverage
+htmlcov/
 
 # Local environment variables
 .env
+.env.local
+.env.*.local
 
-# Uploaded and generated videos
+# Keep environment templates
+!.env.example
+
+# Local uploaded/generated videos
 backend/storage/
 backend/sample_traffic*.avi
+
+# Machine-learning model weights
+backend/*.pt
+backend/models/weights/
+
+# IDE configuration
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Node and Next.js
+node_modules/
+.next/
+out/
+dist/
+
+# Frontend environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+# Local traffic test videos
+backend/traffic_test*.mp4
