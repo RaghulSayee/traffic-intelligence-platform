@@ -64,6 +64,10 @@ class Settings(BaseSettings):
 
     rider_association_minimum_motion_speed: float = 5.0
 
+    rider_temporal_confirmation_frames: int = 3
+    rider_temporal_max_missed_frames: int = 2
+    rider_temporal_score_alpha: float = 0.40
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
