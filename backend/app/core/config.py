@@ -44,6 +44,18 @@ class Settings(BaseSettings):
 
     annotated_preview_enabled: bool = True
 
+    tracker_high_confidence_threshold: float = 0.60
+    tracker_low_confidence_threshold: float = 0.35
+
+    tracker_primary_iou_threshold: float = 0.30
+    tracker_secondary_iou_threshold: float = 0.15
+
+    tracker_min_confirmed_hits: int = 2
+    tracker_max_missed_frames: int = 12
+
+    tracker_process_noise: float = 1.0
+    tracker_measurement_noise: float = 10.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
