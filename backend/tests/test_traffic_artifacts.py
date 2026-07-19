@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from uuid import uuid4
-
+from app.tracking.types import TrackedObject
 import numpy as np
 
 from app.artifacts.traffic_video import (
@@ -56,13 +56,34 @@ def test_artifact_writer_creates_jsonl_and_evidence(
         image=frame,
     )
 
+    track = TrackedObject(
+        track_id=7,
+        class_id=2,
+        class_name="car",
+        confidence=0.90,
+        bounding_box=BoundingBox(
+            x1=10,
+            y1=20,
+            x2=100,
+            y2=90,
+        ),
+        age=3,
+        hits=3,
+        missed_frames=0,
+        confirmed=True,
+        velocity_x=15.0,
+        velocity_y=2.0,
+    )
+
     analysis = FrameAnalysis(
         analyzed=True,
         detections=(detection,),
+        tracks=(track,),
         annotated_frame=frame,
         metrics={
             "inference_time_ms": 12.5,
             "detection_count": 1,
+            "confirmed_track_count": 1,
         },
     )
 
@@ -94,6 +115,10 @@ def test_artifact_writer_creates_jsonl_and_evidence(
     assert detection_record["frame_number"] == 1
 
     assert detection_record["detections"][0]["class_name"] == "car"
+
+    assert detection_record["tracks"][0]["track_id"] == 7
+
+    assert detection_record["tracks"][0]["confirmed"] is True
 
     assert artifact_summary.analyzed_frames == 1
     assert len(artifact_summary.evidence_keys) == 1
