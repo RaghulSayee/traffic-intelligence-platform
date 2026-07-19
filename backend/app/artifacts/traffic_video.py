@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TextIO
 from uuid import UUID
+from app.tracking.types import TrackedObject
 
 import cv2
 
@@ -131,7 +132,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -141,6 +142,7 @@ class TrafficVideoArtifactWriter:
                 self._serialize_detection(detection)
                 for detection in analysis.detections
             ],
+            "tracks": [self._serialize_track(track) for track in analysis.tracks],
         }
 
         self.detections_file.write(
@@ -315,6 +317,39 @@ class TrafficVideoArtifactWriter:
             "class_name": detection.class_name,
             "confidence": detection.confidence,
             "model_name": detection.model_name,
+            "bounding_box": {
+                "x1": box.x1,
+                "y1": box.y1,
+                "x2": box.x2,
+                "y2": box.y2,
+                "width": box.width,
+                "height": box.height,
+                "area": box.area,
+                "center": list(box.center),
+            },
+        }
+
+    @staticmethod
+    def _serialize_track(
+        track: TrackedObject,
+    ) -> dict[str, Any]:
+        """Convert one track into JSON-compatible values."""
+
+        box = track.bounding_box
+
+        return {
+            "track_id": track.track_id,
+            "class_id": track.class_id,
+            "class_name": track.class_name,
+            "confidence": track.confidence,
+            "confirmed": track.confirmed,
+            "age": track.age,
+            "hits": track.hits,
+            "missed_frames": track.missed_frames,
+            "velocity": {
+                "x_pixels_per_second": (track.velocity_x),
+                "y_pixels_per_second": (track.velocity_y),
+            },
             "bounding_box": {
                 "x1": box.x1,
                 "y1": box.y1,

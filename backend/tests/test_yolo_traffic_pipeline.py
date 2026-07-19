@@ -12,6 +12,9 @@ from app.pipelines.base import (
 from app.pipelines.yolo_traffic import (
     YoloTrafficPipeline,
 )
+from app.tracking.multi_object import (
+    MultiObjectTracker,
+)
 
 
 class FakeDetector:
@@ -50,11 +53,25 @@ class FakeDetector:
         )
 
 
-def test_yolo_pipeline_respects_frame_stride() -> None:
+def create_tracker() -> MultiObjectTracker:
+    return MultiObjectTracker(
+        high_confidence_threshold=0.60,
+        low_confidence_threshold=0.35,
+        primary_iou_threshold=0.30,
+        secondary_iou_threshold=0.15,
+        minimum_confirmed_hits=1,
+        maximum_missed_frames=2,
+        process_noise=1.0,
+        measurement_noise=10.0,
+    )
+
+
+def test_yolo_pipeline_tracks_sampled_frames() -> None:
     detector = FakeDetector()
 
     pipeline = YoloTrafficPipeline(
         detector=detector,
+        tracker=create_tracker(),
         frame_stride=2,
     )
 
@@ -105,10 +122,18 @@ def test_yolo_pipeline_respects_frame_stride() -> None:
 
     assert detector.calls == 2
 
+    assert len(first.tracks) == 1
+    assert len(third.tracks) == 1
+
+    assert first.tracks[0].track_id == third.tracks[0].track_id
+
     assert summary.metrics["frames_seen"] == 3
     assert summary.metrics["frames_analyzed"] == 2
-    assert summary.metrics["total_detections"] == 2
 
-    assert summary.metrics["class_counts"] == {
-        "motorcycle": 2,
+    assert summary.metrics["total_detection_occurrences"] == 2
+
+    assert summary.metrics["unique_confirmed_tracks"] == 1
+
+    assert summary.metrics["unique_track_counts_by_class"] == {
+        "motorcycle": 1,
     }

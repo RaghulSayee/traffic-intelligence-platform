@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from app.detection.types import Detection
+    from app.tracking.types import TrackedObject
 
 
 VideoFrame = NDArray[np.uint8]
@@ -37,9 +38,13 @@ class FramePacket:
 class FrameAnalysis:
     """Analysis produced for one decoded video frame."""
 
-    metrics: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(
+        default_factory=dict,
+    )
 
     detections: tuple[Detection, ...] = ()
+
+    tracks: tuple[TrackedObject, ...] = ()
 
     annotated_frame: VideoFrame | None = None
 
@@ -50,7 +55,9 @@ class FrameAnalysis:
 class PipelineSummary:
     """Final aggregated information produced by a pipeline."""
 
-    metrics: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(
+        default_factory=dict,
+    )
 
 
 class VideoAnalysisPipeline(Protocol):
