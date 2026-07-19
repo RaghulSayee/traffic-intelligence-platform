@@ -18,7 +18,14 @@ from app.pipelines.base import (
     FramePacket,
     VideoContext,
 )
-from app.pipelines.factory import create_video_pipeline
+from typing import Any
+
+from app.artifacts.traffic_video import (
+    TrafficVideoArtifactWriter,
+)
+from app.pipelines.factory import (
+    VideoPipelineFactory,
+)
 from app.repositories.processing_job import (
     ProcessingJobRepository,
 )
@@ -43,6 +50,7 @@ class VideoProcessingWorker:
         self.settings = settings
         self.storage = storage
         self.stop_event = stop_event
+        self.pipeline_factory = VideoPipelineFactory(settings)
 
     async def run_forever(self) -> None:
         """Continuously recover and process queued jobs."""
@@ -187,7 +195,7 @@ class VideoProcessingWorker:
         video: Video,
         path: Path,
     ) -> None:
-        pipeline = create_video_pipeline(job.pipeline_name)
+        pipeline = self.pipeline_factory.create(job.pipeline_name)
 
         capture = cv2.VideoCapture(str(path))
 
@@ -195,7 +203,7 @@ class VideoProcessingWorker:
             raise InvalidVideoError("The worker could not open the stored video.")
 
         processed_frames = 0
-        latest_metrics: dict[str, float] = {}
+        latest_metrics: dict[str, Any] = {}
 
         started_clock = time.perf_counter()
 
@@ -216,6 +224,31 @@ class VideoProcessingWorker:
                 expected_frame_count=expected_frame_count,
             )
         )
+        frame_stride = max(
+            int(
+                getattr(
+                    pipeline,
+                    "frame_stride",
+                    1,
+                )
+            ),
+            1,
+        )
+
+        preview_fps = max(
+            (fps or 10.0) / frame_stride,
+            1.0,
+        )
+
+        artifact_writer = TrafficVideoArtifactWriter(
+            root=self.settings.evidence_storage_path,
+            job_id=job.id,
+            preview_fps=preview_fps,
+            evidence_min_confidence=(self.settings.evidence_min_confidence),
+            evidence_cooldown_frames=(self.settings.evidence_cooldown_frames),
+            max_evidence_frames=(self.settings.max_evidence_frames),
+            preview_enabled=(self.settings.annotated_preview_enabled),
+        )
 
         try:
             while not self.stop_event.is_set():
@@ -232,15 +265,21 @@ class VideoProcessingWorker:
                     frames_per_second=fps,
                 )
 
-                analysis = pipeline.process_frame(
-                    FramePacket(
-                        frame_number=processed_frames,
-                        timestamp_seconds=timestamp_seconds,
-                        image=frame,
-                    )
+                packet = FramePacket(
+                    frame_number=processed_frames,
+                    timestamp_seconds=timestamp_seconds,
+                    image=frame,
                 )
 
-                latest_metrics = analysis.metrics
+                analysis = pipeline.process_frame(packet)
+
+                artifact_writer.write(
+                    packet=packet,
+                    analysis=analysis,
+                )
+
+                if analysis.analyzed:
+                    latest_metrics = analysis.metrics
 
                 should_report = (
                     processed_frames % self.settings.worker_progress_interval_frames
@@ -268,6 +307,8 @@ class VideoProcessingWorker:
 
             summary = pipeline.finish()
 
+            artifact_summary = artifact_writer.finish(pipeline_summary=summary.metrics)
+
             elapsed_seconds = max(
                 time.perf_counter() - started_clock,
                 0.000001,
@@ -281,6 +322,7 @@ class VideoProcessingWorker:
                 "average_processing_fps": (processed_frames / elapsed_seconds),
                 "latest_frame_metrics": latest_metrics,
                 "summary": summary.metrics,
+                "artifacts": artifact_summary.as_dict(),
             }
 
             await self._mark_succeeded(
@@ -295,6 +337,10 @@ class VideoProcessingWorker:
                 elapsed_seconds,
             )
 
+        except Exception:
+            artifact_writer.abort()
+            raise
+
         finally:
             capture.release()
 
@@ -305,7 +351,7 @@ class VideoProcessingWorker:
         processed_frames: int,
         expected_frame_count: int | None,
         started_clock: float,
-        latest_metrics: dict[str, float],
+        latest_metrics: dict[str, Any],
         pipeline_name: str,
         pipeline_version: str,
     ) -> None:
