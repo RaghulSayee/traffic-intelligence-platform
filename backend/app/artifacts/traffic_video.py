@@ -14,6 +14,13 @@ from app.pipelines.base import (
     FrameAnalysis,
     FramePacket,
 )
+from app.reasoning.temporal_rider import (
+    TemporalRiderAssociation,
+)
+from app.reasoning.triple_riding import (
+    TripleRidingTransition,
+    TripleRidingViolationSnapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -132,7 +139,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.1",
+            "schema_version": "1.2",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -143,6 +150,20 @@ class TrafficVideoArtifactWriter:
                 for detection in analysis.detections
             ],
             "tracks": [self._serialize_track(track) for track in analysis.tracks],
+            "rider_associations": [
+                self._serialize_rider_association(association)
+                for association in analysis.rider_associations
+            ],
+            "triple_riding": {
+                "states": [
+                    self._serialize_triple_riding_state(state)
+                    for state in analysis.triple_riding_states
+                ],
+                "transitions": [
+                    self._serialize_triple_riding_transition(transition)
+                    for transition in analysis.triple_riding_transitions
+                ],
+            },
         }
 
         self.detections_file.write(
@@ -360,4 +381,71 @@ class TrafficVideoArtifactWriter:
                 "area": box.area,
                 "center": list(box.center),
             },
+        }
+
+    @staticmethod
+    def _serialize_rider_association(
+        association: TemporalRiderAssociation,
+    ) -> dict[str, Any]:
+        """Serialize a temporal rider relationship."""
+
+        features = association.features
+
+        return {
+            "person_track_id": (association.person_track_id),
+            "motorcycle_track_id": (association.motorcycle_track_id),
+            "latest_score": association.latest_score,
+            "smoothed_score": (association.smoothed_score),
+            "consecutive_matches": (association.consecutive_matches),
+            "total_matches": (association.total_matches),
+            "missed_frames": (association.missed_frames),
+            "confirmed": association.confirmed,
+            "observed_this_frame": (association.observed_this_frame),
+            "features": {
+                "horizontal_overlap_score": (features.horizontal_overlap_score),
+                "anchor_distance_score": (features.anchor_distance_score),
+                "vertical_position_score": (features.vertical_position_score),
+                "motion_similarity_score": (features.motion_similarity_score),
+                "containment_score": (features.containment_score),
+            },
+        }
+
+    @staticmethod
+    def _serialize_triple_riding_state(
+        state: TripleRidingViolationSnapshot,
+    ) -> dict[str, Any]:
+        """Serialize a triple-riding state."""
+
+        return {
+            "motorcycle_track_id": (state.motorcycle_track_id),
+            "rider_track_ids": list(state.rider_track_ids),
+            "rider_count": state.rider_count,
+            "peak_rider_count": (state.peak_rider_count),
+            "average_association_score": (state.average_association_score),
+            "first_candidate_frame": (state.first_candidate_frame),
+            "confirmed_frame": (state.confirmed_frame),
+            "last_violation_frame": (state.last_violation_frame),
+            "consecutive_violation_frames": (state.consecutive_violation_frames),
+            "missed_frames": state.missed_frames,
+            "confirmed": state.confirmed,
+            "observed_this_frame": (state.observed_this_frame),
+        }
+
+    @staticmethod
+    def _serialize_triple_riding_transition(
+        transition: TripleRidingTransition,
+    ) -> dict[str, Any]:
+        """Serialize a violation lifecycle transition."""
+
+        return {
+            "transition_type": (transition.transition_type.value),
+            "motorcycle_track_id": (transition.motorcycle_track_id),
+            "rider_track_ids": list(transition.rider_track_ids),
+            "rider_count": (transition.rider_count),
+            "peak_rider_count": (transition.peak_rider_count),
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "first_candidate_frame": (transition.first_candidate_frame),
+            "confirmed_frame": (transition.confirmed_frame),
+            "duration_seconds": (transition.duration_seconds),
         }
