@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from app.detection.types import Detection
 
 
 VideoFrame = NDArray[np.uint8]
@@ -10,7 +15,7 @@ VideoFrame = NDArray[np.uint8]
 
 @dataclass(frozen=True)
 class VideoContext:
-    """Information available when a pipeline begins processing."""
+    """Information available when video processing begins."""
 
     video_id: str
     width: int
@@ -30,9 +35,15 @@ class FramePacket:
 
 @dataclass(frozen=True)
 class FrameAnalysis:
-    """Analysis produced for one video frame."""
+    """Analysis produced for one decoded video frame."""
 
-    metrics: dict[str, float] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+    detections: tuple[Detection, ...] = ()
+
+    annotated_frame: VideoFrame | None = None
+
+    analyzed: bool = True
 
 
 @dataclass(frozen=True)
@@ -52,7 +63,7 @@ class VideoAnalysisPipeline(Protocol):
         self,
         context: VideoContext,
     ) -> None:
-        """Initialize state before the first frame."""
+        """Initialize processing state for a new video."""
 
         ...
 

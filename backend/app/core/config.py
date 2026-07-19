@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     detector_iou_threshold: float = 0.50
     detector_image_size: int = 640
 
+    evidence_storage_path: Path = Path("storage/evidence")
+
+    detector_frame_stride: int = 5
+
+    evidence_min_confidence: float = 0.65
+    evidence_cooldown_frames: int = 30
+    max_evidence_frames: int = 20
+
+    annotated_preview_enabled: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

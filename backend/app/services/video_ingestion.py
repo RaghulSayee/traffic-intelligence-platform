@@ -127,7 +127,7 @@ class VideoIngestionService:
                 status=ProcessingJobStatus.QUEUED,
                 priority=priority,
                 pipeline_name=("traffic-violation-pipeline"),
-                pipeline_version="0.1.0",
+                pipeline_version="0.2.0",
                 model_versions={},
                 job_metrics={},
             )
