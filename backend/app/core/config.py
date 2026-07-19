@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     rider_temporal_max_missed_frames: int = 2
     rider_temporal_score_alpha: float = 0.40
 
+    triple_riding_minimum_riders: int = 3
+    triple_riding_confirmation_frames: int = 3
+    triple_riding_maximum_missed_frames: int = 2
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
