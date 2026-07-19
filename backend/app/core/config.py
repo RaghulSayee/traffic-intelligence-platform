@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     tracker_process_noise: float = 1.0
     tracker_measurement_noise: float = 10.0
 
+    rider_association_minimum_score: float = 0.55
+    rider_association_max_riders_per_motorcycle: int = 3
+
+    rider_association_max_anchor_distance_ratio: float = 2.0
+    rider_association_minimum_horizontal_overlap: float = 0.05
+
+    rider_association_minimum_motion_speed: float = 5.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
