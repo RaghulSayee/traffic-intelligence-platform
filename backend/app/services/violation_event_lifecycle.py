@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -413,3 +414,72 @@ class ViolationEventLifecycleService:
                 "center": list(box.center),
             },
         }
+
+    async def attach_images_to_job_events(
+        self,
+        *,
+        processing_job_id: UUID,
+        evidence_keys: tuple[str, ...],
+    ) -> int:
+        """Attach the nearest evidence image to each violation."""
+
+        if not evidence_keys:
+            return 0
+
+        events = await self.repository.list_by_processing_job(
+            processing_job_id,
+            for_update=True,
+        )
+
+        evidence_frames = [
+            (
+                key,
+                self._extract_evidence_frame(key),
+            )
+            for key in evidence_keys
+        ]
+
+        evidence_frames = [
+            (key, frame_number)
+            for key, frame_number in evidence_frames
+            if frame_number is not None
+        ]
+
+        changed_count = 0
+
+        for event in events:
+            if not evidence_frames:
+                continue
+
+            event_frame = event.frame_number or 0
+
+            nearest_key, _ = min(
+                evidence_frames,
+                key=lambda item: abs(item[1] - event_frame),
+            )
+
+            if event.evidence_image_key == nearest_key:
+                continue
+
+            event.evidence_image_key = nearest_key
+            changed_count += 1
+
+        if events:
+            await self.repository.commit()
+
+        return changed_count
+
+    @staticmethod
+    def _extract_evidence_frame(
+        key: str,
+    ) -> int | None:
+        match = re.search(
+            r"frame-(\d+)\.(?:jpg|jpeg|png|webp)$",
+            key,
+            flags=re.IGNORECASE,
+        )
+
+        if match is None:
+            return None
+
+        return int(match.group(1))

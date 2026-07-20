@@ -325,6 +325,11 @@ class VideoProcessingWorker:
                 preview_key=(artifact_summary.preview_key),
             )
 
+            await self._attach_violation_images(
+                job_id=job.id,
+                evidence_keys=(artifact_summary.evidence_keys),
+            )
+
             elapsed_seconds = max(
                 time.perf_counter() - started_clock,
                 0.000001,
@@ -533,3 +538,22 @@ class VideoProcessingWorker:
             return None
 
         return int(positive_value)
+
+    async def _attach_violation_images(
+        self,
+        *,
+        job_id: UUID,
+        evidence_keys: tuple[str, ...],
+    ) -> None:
+        """Attach nearby evidence frames to job violations."""
+
+        if not evidence_keys:
+            return
+
+        async with AsyncSessionFactory() as session:
+            service = ViolationEventLifecycleService(session)
+
+            await service.attach_images_to_job_events(
+                processing_job_id=job_id,
+                evidence_keys=evidence_keys,
+            )
