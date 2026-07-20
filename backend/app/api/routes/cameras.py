@@ -13,6 +13,7 @@ from app.api.dependencies import CameraServiceDependency
 from app.core.exceptions import (
     CameraNameConflictError,
     CameraNotFoundError,
+    InvalidCameraSceneConfigurationError,
 )
 from app.models.enums import CameraStatus
 from app.schemas.camera import (
@@ -20,6 +21,9 @@ from app.schemas.camera import (
     CameraListResponse,
     CameraRead,
     CameraUpdate,
+)
+from app.schemas.camera_scene import (
+    CameraSceneConfiguration,
 )
 
 
@@ -83,6 +87,56 @@ async def list_cameras(
         offset=offset,
         limit=limit,
     )
+
+
+@router.get(
+    "/{camera_id}/scene",
+    response_model=CameraSceneConfiguration,
+)
+async def get_camera_scene(
+    camera_id: UUID,
+    service: CameraServiceDependency,
+) -> CameraSceneConfiguration:
+    """Return a camera's road-scene configuration."""
+
+    try:
+        return await service.get_scene_configuration(camera_id)
+
+    except CameraNotFoundError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidCameraSceneConfigurationError as exc:
+        raise HTTPException(
+            status_code=(http_status.HTTP_422_UNPROCESSABLE_ENTITY),
+            detail=str(exc),
+        ) from exc
+
+
+@router.put(
+    "/{camera_id}/scene",
+    response_model=CameraSceneConfiguration,
+)
+async def update_camera_scene(
+    camera_id: UUID,
+    payload: CameraSceneConfiguration,
+    service: CameraServiceDependency,
+) -> CameraSceneConfiguration:
+    """Replace a camera's road-scene configuration."""
+
+    try:
+        return await service.update_scene_configuration(
+            camera_id,
+            payload,
+        )
+
+    except CameraNotFoundError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(

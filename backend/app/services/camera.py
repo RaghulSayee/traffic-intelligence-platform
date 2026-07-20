@@ -6,11 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     CameraNameConflictError,
     CameraNotFoundError,
+    InvalidCameraSceneConfigurationError,
 )
 from app.models.camera import Camera
 from app.models.enums import CameraStatus
 from app.repositories.camera import CameraRepository
 from app.schemas.camera import CameraCreate, CameraUpdate
+from app.schemas.camera_scene import (
+    CameraSceneConfiguration,
+)
 
 
 class CameraService:
@@ -128,6 +132,46 @@ class CameraService:
         await self.session.refresh(camera)
 
         return camera
+
+    async def get_scene_configuration(
+        self,
+        camera_id: UUID,
+    ) -> CameraSceneConfiguration:
+        """Return the validated scene configuration for a camera."""
+
+        camera = await self.get_camera(camera_id)
+
+        configuration = dict(camera.configuration or {})
+
+        raw_scene = configuration.get("scene")
+
+        if raw_scene is None:
+            return CameraSceneConfiguration()
+
+        try:
+            return CameraSceneConfiguration.model_validate(raw_scene)
+        except ValueError as exc:
+            raise (InvalidCameraSceneConfigurationError(camera_id)) from exc
+
+    async def update_scene_configuration(
+        self,
+        camera_id: UUID,
+        payload: CameraSceneConfiguration,
+    ) -> CameraSceneConfiguration:
+        """Replace a camera's validated scene configuration."""
+
+        camera = await self.get_camera(camera_id)
+
+        configuration = dict(camera.configuration or {})
+
+        configuration["scene"] = payload.model_dump(mode="json")
+
+        camera.configuration = configuration
+
+        await self.session.commit()
+        await self.session.refresh(camera)
+
+        return payload
 
     async def delete_camera(
         self,

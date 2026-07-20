@@ -172,6 +172,7 @@ class ProcessingJobRepository:
         worker_id: str,
         progress_percent: float,
         last_processed_frame: int,
+        pipeline_version: str,
         metrics: dict[str, Any],
         lease_seconds: int,
     ) -> None:
@@ -197,6 +198,8 @@ class ProcessingJobRepository:
         job.heartbeat_at = now
         job.lease_expires_at = now + timedelta(seconds=lease_seconds)
 
+        job.pipeline_version = pipeline_version
+
         job.job_metrics = {
             **(job.job_metrics or {}),
             **metrics,
@@ -209,6 +212,7 @@ class ProcessingJobRepository:
         *,
         job_id: UUID,
         worker_id: str,
+        pipeline_version: str,
         metrics: dict[str, Any],
     ) -> None:
         """Mark a worker-owned job as successfully completed."""
@@ -231,6 +235,7 @@ class ProcessingJobRepository:
         job.heartbeat_at = now
         job.lease_expires_at = None
         job.error_message = None
+        job.pipeline_version = pipeline_version
 
         job.job_metrics = {
             **(job.job_metrics or {}),
