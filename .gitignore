@@ -53,3 +53,8 @@ frontend/.env.local
 frontend/.env.*.local
 # Local traffic test videos
 backend/traffic_test*.mp4
+
+# Local ML model weights
+backend/models/*.pt
+backend/models/*.onnx
+backend/models/*.engine
