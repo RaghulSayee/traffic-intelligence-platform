@@ -92,3 +92,29 @@ class ViolationEventNotFoundError(Exception):
         self.violation_id = violation_id
 
         super().__init__(f"Violation event '{violation_id}' was not found.")
+
+
+class EvidenceMediaNotFoundError(Exception):
+    """Raised when requested evidence media is unavailable."""
+
+    def __init__(
+        self,
+        *,
+        media_kind: str,
+        owner_id: UUID,
+    ) -> None:
+        self.media_kind = media_kind
+        self.owner_id = owner_id
+
+        super().__init__(
+            f"{media_kind.capitalize()} evidence for '{owner_id}' was not found."
+        )
+
+
+class InvalidEvidenceKeyError(Exception):
+    """Raised when an evidence key is unsafe or unsupported."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+        super().__init__("The stored evidence key is invalid.")

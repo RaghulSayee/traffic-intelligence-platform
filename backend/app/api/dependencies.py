@@ -20,6 +20,13 @@ from app.storage.local import LocalVideoStorage
 from app.services.violation_event import (
     ViolationEventService,
 )
+from app.services.evidence_media import (
+    EvidenceMediaService,
+)
+from app.storage.artifacts import (
+    ArtifactStorage,
+    LocalArtifactStorage,
+)
 
 DatabaseSession = Annotated[
     AsyncSession,
@@ -100,4 +107,39 @@ def get_violation_event_service(
 ViolationEventServiceDependency = Annotated[
     ViolationEventService,
     Depends(get_violation_event_service),
+]
+
+
+@lru_cache
+def get_artifact_storage() -> ArtifactStorage:
+    """Create the configured artifact-storage provider."""
+
+    settings = get_settings()
+
+    return LocalArtifactStorage(
+        root=settings.evidence_storage_path,
+    )
+
+
+ArtifactStorageDependency = Annotated[
+    ArtifactStorage,
+    Depends(get_artifact_storage),
+]
+
+
+def get_evidence_media_service(
+    session: DatabaseSession,
+    storage: ArtifactStorageDependency,
+) -> EvidenceMediaService:
+    """Construct the evidence-media service."""
+
+    return EvidenceMediaService(
+        session=session,
+        storage=storage,
+    )
+
+
+EvidenceMediaServiceDependency = Annotated[
+    EvidenceMediaService,
+    Depends(get_evidence_media_service),
 ]

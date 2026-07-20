@@ -6,12 +6,17 @@ from fastapi import (
     HTTPException,
     Query,
     status,
+    Request,
+    Response,
 )
 
 from app.api.dependencies import (
+    EvidenceMediaServiceDependency,
     ViolationEventServiceDependency,
 )
 from app.core.exceptions import (
+    EvidenceMediaNotFoundError,
+    InvalidEvidenceKeyError,
     ViolationEventNotFoundError,
 )
 from app.models.enums import (
@@ -22,6 +27,9 @@ from app.schemas.violation_event import (
     ViolationEventListResponse,
     ViolationEventRead,
     ViolationReviewUpdate,
+)
+from app.api.media import (
+    create_artifact_response,
 )
 
 
@@ -107,6 +115,82 @@ async def get_violation(
         ) from exc
 
     return ViolationEventRead.model_validate(violation)
+
+
+@router.get(
+    "/{violation_id}/evidence/image",
+    response_class=Response,
+)
+async def get_violation_evidence_image(
+    violation_id: UUID,
+    request: Request,
+    service: EvidenceMediaServiceDependency,
+) -> Response:
+    """Stream a violation evidence image."""
+
+    try:
+        artifact = await service.get_violation_image(violation_id)
+
+    except ViolationEventNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except EvidenceMediaNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidEvidenceKeyError as exc:
+        raise HTTPException(
+            status_code=(status.HTTP_422_UNPROCESSABLE_ENTITY),
+            detail=str(exc),
+        ) from exc
+
+    return create_artifact_response(
+        request=request,
+        artifact=artifact,
+    )
+
+
+@router.get(
+    "/{violation_id}/evidence/clip",
+    response_class=Response,
+)
+async def get_violation_evidence_clip(
+    violation_id: UUID,
+    request: Request,
+    service: EvidenceMediaServiceDependency,
+) -> Response:
+    """Stream a violation evidence clip."""
+
+    try:
+        artifact = await service.get_violation_clip(violation_id)
+
+    except ViolationEventNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except EvidenceMediaNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidEvidenceKeyError as exc:
+        raise HTTPException(
+            status_code=(status.HTTP_422_UNPROCESSABLE_ENTITY),
+            detail=str(exc),
+        ) from exc
+
+    return create_artifact_response(
+        request=request,
+        artifact=artifact,
+    )
 
 
 @router.patch(
