@@ -3,6 +3,7 @@ import logging
 import time
 from pathlib import Path
 from uuid import UUID
+from typing import Any
 
 import cv2
 
@@ -15,10 +16,13 @@ from app.db.session import AsyncSessionFactory
 from app.models.processing_job import ProcessingJob
 from app.models.video import Video
 from app.pipelines.base import (
+    FrameAnalysis,
     FramePacket,
     VideoContext,
 )
-from typing import Any
+from app.services.violation_event_lifecycle import (
+    ViolationEventLifecycleService,
+)
 
 from app.artifacts.traffic_video import (
     TrafficVideoArtifactWriter,
@@ -278,6 +282,13 @@ class VideoProcessingWorker:
                     analysis=analysis,
                 )
 
+                if analysis.triple_riding_transitions:
+                    await self._persist_violation_transitions(
+                        job=job,
+                        video=video,
+                        analysis=analysis,
+                    )
+
                 if analysis.analyzed:
                     latest_metrics = analysis.metrics
 
@@ -308,6 +319,11 @@ class VideoProcessingWorker:
             summary = pipeline.finish()
 
             artifact_summary = artifact_writer.finish(pipeline_summary=summary.metrics)
+
+            await self._attach_violation_preview(
+                job_id=job.id,
+                preview_key=(artifact_summary.preview_key),
+            )
 
             elapsed_seconds = max(
                 time.perf_counter() - started_clock,
@@ -343,6 +359,51 @@ class VideoProcessingWorker:
 
         finally:
             capture.release()
+
+    async def _persist_violation_transitions(
+        self,
+        *,
+        job: ProcessingJob,
+        video: Video,
+        analysis: FrameAnalysis,
+    ) -> None:
+        """Persist sparse violation lifecycle transitions."""
+
+        async with AsyncSessionFactory() as session:
+            service = ViolationEventLifecycleService(session)
+
+            await service.persist_triple_riding_transitions(
+                processing_job_id=job.id,
+                video_id=video.id,
+                camera_id=getattr(
+                    video,
+                    "camera_id",
+                    None,
+                ),
+                video_created_at=(video.created_at),
+                transitions=(analysis.triple_riding_transitions),
+                states=(analysis.triple_riding_states),
+                tracks=analysis.tracks,
+            )
+
+    async def _attach_violation_preview(
+        self,
+        *,
+        job_id: UUID,
+        preview_key: str | None,
+    ) -> None:
+        """Attach the completed preview to persisted events."""
+
+        if preview_key is None:
+            return
+
+        async with AsyncSessionFactory() as session:
+            service = ViolationEventLifecycleService(session)
+
+            await service.attach_preview_to_job_events(
+                processing_job_id=job_id,
+                preview_key=preview_key,
+            )
 
     async def _report_progress(
         self,
