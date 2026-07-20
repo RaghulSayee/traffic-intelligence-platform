@@ -1,5 +1,8 @@
 import numpy as np
 
+from app.detection.helmet import (
+    DisabledHelmetDetector,
+)
 from app.detection.types import (
     BoundingBox,
     Detection,
@@ -14,6 +17,12 @@ from app.pipelines.yolo_traffic import (
 )
 from app.tracking.multi_object import (
     MultiObjectTracker,
+)
+from app.reasoning.helmet_rider import (
+    HelmetRiderAssociator,
+)
+from app.reasoning.no_helmet import (
+    NoHelmetViolationDetector,
 )
 from app.reasoning.rider_motorcycle import (
     RiderMotorcycleAssociator,
@@ -270,12 +279,14 @@ def test_yolo_pipeline_tracks_sampled_frames() -> None:
 def create_reasoning_pipeline(
     *,
     detector,
+    helmet_detector=None,
     frame_stride: int = 1,
     temporal_confirmation_frames: int = 1,
     violation_confirmation_frames: int = 1,
 ) -> YoloTrafficPipeline:
     return YoloTrafficPipeline(
         detector=detector,
+        helmet_detector=(helmet_detector or DisabledHelmetDetector()),
         tracker=create_tracker(),
         rider_associator=(
             RiderMotorcycleAssociator(
@@ -293,6 +304,13 @@ def create_reasoning_pipeline(
                 score_alpha=0.40,
             )
         ),
+        helmet_rider_associator=(
+            HelmetRiderAssociator(
+                head_height_ratio=0.35,
+                head_width_expansion_ratio=0.10,
+                minimum_score=0.45,
+            )
+        ),
         triple_riding_detector=(
             TripleRidingViolationDetector(
                 minimum_riders=3,
@@ -300,5 +318,150 @@ def create_reasoning_pipeline(
                 maximum_missed_frames=2,
             )
         ),
+        no_helmet_detector=(
+            NoHelmetViolationDetector(
+                confirmation_frames=2,
+                maximum_missed_frames=1,
+                confidence_alpha=0.40,
+            )
+        ),
         frame_stride=frame_stride,
     )
+
+
+class SingleRiderFakeDetector:
+    """Return one rider and one motorcycle."""
+
+    model_name = "fake-single-rider-model"
+    device = "cpu"
+
+    def predict(
+        self,
+        frame,
+    ) -> DetectionResult:
+        return DetectionResult(
+            detections=(
+                Detection(
+                    class_id=0,
+                    class_name="person",
+                    confidence=0.95,
+                    bounding_box=BoundingBox(
+                        x1=100,
+                        y1=40,
+                        x2=160,
+                        y2=220,
+                    ),
+                    model_name=self.model_name,
+                ),
+                Detection(
+                    class_id=3,
+                    class_name="motorcycle",
+                    confidence=0.96,
+                    bounding_box=BoundingBox(
+                        x1=90,
+                        y1=180,
+                        x2=175,
+                        y2=270,
+                    ),
+                    model_name=self.model_name,
+                ),
+            ),
+            inference_time_ms=8.0,
+            image_width=frame.shape[1],
+            image_height=frame.shape[0],
+        )
+
+
+class NoHelmetFakeDetector:
+    """Return a no-helmet detection near the rider's head."""
+
+    enabled = True
+    model_name = "fake-no-helmet-model"
+    device = "cpu"
+
+    def predict(
+        self,
+        frame,
+    ) -> DetectionResult:
+        return DetectionResult(
+            detections=(
+                Detection(
+                    class_id=1,
+                    class_name="no_helmet",
+                    confidence=0.93,
+                    bounding_box=BoundingBox(
+                        x1=112,
+                        y1=45,
+                        x2=148,
+                        y2=100,
+                    ),
+                    model_name=self.model_name,
+                ),
+            ),
+            inference_time_ms=4.0,
+            image_width=frame.shape[1],
+            image_height=frame.shape[0],
+        )
+
+
+def test_pipeline_confirms_no_helmet_violation() -> None:
+    pipeline = create_reasoning_pipeline(
+        detector=SingleRiderFakeDetector(),
+        helmet_detector=(NoHelmetFakeDetector()),
+        temporal_confirmation_frames=1,
+    )
+
+    pipeline.start(
+        VideoContext(
+            video_id="no-helmet-video",
+            width=320,
+            height=280,
+            frames_per_second=30,
+            expected_frame_count=2,
+        )
+    )
+
+    frame = np.zeros(
+        (
+            280,
+            320,
+            3,
+        ),
+        dtype=np.uint8,
+    )
+
+    first = pipeline.process_frame(
+        FramePacket(
+            frame_number=1,
+            timestamp_seconds=0.0,
+            image=frame,
+        )
+    )
+
+    second = pipeline.process_frame(
+        FramePacket(
+            frame_number=2,
+            timestamp_seconds=0.1,
+            image=frame,
+        )
+    )
+
+    summary = pipeline.finish()
+
+    assert len(first.no_helmet_states) == 1
+    assert first.no_helmet_states[0].confirmed is False
+
+    assert len(second.no_helmet_states) == 1
+    assert second.no_helmet_states[0].confirmed is True
+
+    assert len(second.no_helmet_transitions) == 1
+
+    assert second.no_helmet_transitions[0].transition_type.value == "started"
+
+    assert summary.metrics["no_helmet_event_count"] == 1
+
+    assert summary.metrics["unique_no_helmet_riders"] == 1
+
+    assert summary.metrics["helmet_detection_class_counts"] == {
+        "no_helmet": 2,
+    }

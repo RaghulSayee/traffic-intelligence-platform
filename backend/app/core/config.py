@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     helmet_detector_iou_threshold: float = 0.50
     helmet_detector_image_size: int = 640
 
+    helmet_head_height_ratio: float = 0.35
+    helmet_head_width_expansion_ratio: float = 0.10
+    helmet_rider_minimum_score: float = 0.45
+
+    no_helmet_confirmation_frames: int = 3
+    no_helmet_maximum_missed_frames: int = 2
+    no_helmet_confidence_alpha: float = 0.40
+
     evidence_storage_path: Path = Path("storage/evidence")
 
     detector_frame_stride: int = 5
