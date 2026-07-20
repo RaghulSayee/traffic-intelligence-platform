@@ -1,5 +1,12 @@
+from pathlib import Path
+
 from app.core.config import Settings
 from app.detection.base import ObjectDetector
+from app.detection.helmet import (
+    DisabledHelmetDetector,
+    HelmetDetector,
+    UltralyticsHelmetDetector,
+)
 from app.detection.ultralytics_detector import (
     UltralyticsObjectDetector,
 )
@@ -35,6 +42,8 @@ class VideoPipelineFactory:
 
         self._traffic_detector: ObjectDetector | None = None
 
+        self._helmet_detector: HelmetDetector | None = None
+
     def create(
         self,
         pipeline_name: str,
@@ -51,6 +60,37 @@ class VideoPipelineFactory:
             return self._create_yolo_pipeline()
 
         raise ValueError(f"Unsupported pipeline: '{pipeline_name}'.")
+
+    def get_helmet_detector(
+        self,
+    ) -> HelmetDetector:
+        """Create and cache the configured helmet detector."""
+
+        if self._helmet_detector is not None:
+            return self._helmet_detector
+
+        if not self.settings.helmet_detector_enabled:
+            self._helmet_detector = DisabledHelmetDetector()
+
+            return self._helmet_detector
+
+        model_path = Path(self.settings.helmet_detector_model_path).expanduser()
+
+        if not model_path.is_file():
+            raise FileNotFoundError(
+                "Helmet detection is enabled, but "
+                f"the model was not found: '{model_path}'."
+            )
+
+        self._helmet_detector = UltralyticsHelmetDetector(
+            model_path=str(model_path),
+            device=(self.settings.helmet_detector_device),
+            confidence_threshold=(self.settings.helmet_detector_confidence_threshold),
+            iou_threshold=(self.settings.helmet_detector_iou_threshold),
+            image_size=(self.settings.helmet_detector_image_size),
+        )
+
+        return self._helmet_detector
 
     def _create_yolo_pipeline(
         self,

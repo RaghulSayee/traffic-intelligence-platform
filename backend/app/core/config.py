@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     detector_iou_threshold: float = 0.50
     detector_image_size: int = 640
 
+    helmet_detector_enabled: bool = False
+    helmet_detector_model_path: str = "models/helmet_detector.pt"
+    helmet_detector_device: str = "auto"
+    helmet_detector_confidence_threshold: float = 0.40
+    helmet_detector_iou_threshold: float = 0.50
+    helmet_detector_image_size: int = 640
+
     evidence_storage_path: Path = Path("storage/evidence")
 
     detector_frame_stride: int = 5
