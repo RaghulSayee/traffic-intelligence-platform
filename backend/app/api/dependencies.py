@@ -17,7 +17,9 @@ from app.services.processing_job import ProcessingJobService
 from app.services.video_ingestion import VideoIngestionService
 from app.storage.base import VideoStorage
 from app.storage.local import LocalVideoStorage
-
+from app.services.violation_event import (
+    ViolationEventService,
+)
 
 DatabaseSession = Annotated[
     AsyncSession,
@@ -84,4 +86,18 @@ def get_processing_job_service(
 ProcessingJobServiceDependency = Annotated[
     ProcessingJobService,
     Depends(get_processing_job_service),
+]
+
+
+def get_violation_event_service(
+    session: DatabaseSession,
+) -> ViolationEventService:
+    """Construct the violation service for a request."""
+
+    return ViolationEventService(session)
+
+
+ViolationEventServiceDependency = Annotated[
+    ViolationEventService,
+    Depends(get_violation_event_service),
 ]
