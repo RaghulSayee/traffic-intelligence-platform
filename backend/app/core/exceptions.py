@@ -80,3 +80,15 @@ class WorkerLostLeaseError(Exception):
         self.job_id = job_id
 
         super().__init__(f"The worker no longer owns processing job '{job_id}'.")
+
+
+class ViolationEventNotFoundError(Exception):
+    """Raised when a requested violation event does not exist."""
+
+    def __init__(
+        self,
+        violation_id: UUID,
+    ) -> None:
+        self.violation_id = violation_id
+
+        super().__init__(f"Violation event '{violation_id}' was not found.")

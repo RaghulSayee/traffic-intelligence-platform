@@ -6,7 +6,7 @@ from app.api.routes.processing_jobs import (
     router as processing_jobs_router,
 )
 from app.api.routes.videos import router as videos_router
-
+from app.api.routes import violations
 
 api_router = APIRouter()
 
@@ -25,4 +25,9 @@ api_router.include_router(
 api_router.include_router(
     processing_jobs_router,
     prefix="/jobs",
+)
+
+api_router.include_router(
+    violations.router,
+    prefix="/violations",
 )
