@@ -6,6 +6,7 @@ from uuid import UUID
 from typing import Any
 
 import cv2
+from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.core.exceptions import (
@@ -13,12 +14,16 @@ from app.core.exceptions import (
     WorkerLostLeaseError,
 )
 from app.db.session import AsyncSessionFactory
+from app.models.camera import Camera
 from app.models.processing_job import ProcessingJob
 from app.models.video import Video
 from app.pipelines.base import (
     FrameAnalysis,
     FramePacket,
     VideoContext,
+)
+from app.schemas.camera_scene import (
+    CameraSceneConfiguration,
 )
 from app.services.violation_event_lifecycle import (
     ViolationEventLifecycleService,
@@ -130,7 +135,11 @@ class VideoProcessingWorker:
         job_id: UUID,
     ) -> None:
         try:
-            job, video = await self._load_job_and_video(job_id)
+            (
+                job,
+                video,
+                scene_configuration,
+            ) = await self._load_job_and_video(job_id)
 
             path = self.storage.resolve_path(video.storage_key)
 
@@ -138,6 +147,7 @@ class VideoProcessingWorker:
                 job=job,
                 video=video,
                 path=path,
+                scene_configuration=(scene_configuration),
             )
 
         except WorkerLostLeaseError:
@@ -169,7 +179,11 @@ class VideoProcessingWorker:
     async def _load_job_and_video(
         self,
         job_id: UUID,
-    ) -> tuple[ProcessingJob, Video]:
+    ) -> tuple[
+        ProcessingJob,
+        Video,
+        CameraSceneConfiguration,
+    ]:
         async with AsyncSessionFactory() as session:
             job = await session.get(
                 ProcessingJob,
@@ -187,10 +201,51 @@ class VideoProcessingWorker:
             if video is None:
                 raise RuntimeError(f"Video '{job.video_id}' disappeared.")
 
+            camera = None
+
+            if video.camera_id is not None:
+                camera = await session.get(
+                    Camera,
+                    video.camera_id,
+                )
+
+            scene_configuration = self._parse_scene_configuration(camera)
+
             session.expunge(job)
             session.expunge(video)
 
-            return job, video
+            if camera is not None:
+                session.expunge(camera)
+
+            return (
+                job,
+                video,
+                scene_configuration,
+            )
+
+    @staticmethod
+    def _parse_scene_configuration(
+        camera: Camera | None,
+    ) -> CameraSceneConfiguration:
+        """Validate scene configuration loaded from a camera."""
+
+        if camera is None:
+            return CameraSceneConfiguration()
+
+        configuration = dict(camera.configuration or {})
+
+        raw_scene = configuration.get("scene")
+
+        if raw_scene is None:
+            return CameraSceneConfiguration()
+
+        try:
+            return CameraSceneConfiguration.model_validate(raw_scene)
+
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"Camera '{camera.id}' contains an invalid scene configuration."
+            ) from exc
 
     async def _decode_and_process(
         self,
@@ -198,6 +253,7 @@ class VideoProcessingWorker:
         job: ProcessingJob,
         video: Video,
         path: Path,
+        scene_configuration: (CameraSceneConfiguration),
     ) -> None:
         pipeline = self.pipeline_factory.create(job.pipeline_name)
 
@@ -226,6 +282,10 @@ class VideoProcessingWorker:
                 height=video.height or 0,
                 frames_per_second=fps,
                 expected_frame_count=expected_frame_count,
+                camera_id=(
+                    str(video.camera_id) if video.camera_id is not None else None
+                ),
+                scene_configuration=(scene_configuration),
             )
         )
         frame_stride = max(
@@ -348,6 +408,7 @@ class VideoProcessingWorker:
 
             await self._mark_succeeded(
                 job_id=job.id,
+                pipeline_version=pipeline.version,
                 metrics=final_metrics,
             )
 
@@ -467,6 +528,7 @@ class VideoProcessingWorker:
                 worker_id=self.worker_id,
                 progress_percent=progress_percent,
                 last_processed_frame=processed_frames,
+                pipeline_version=pipeline_version,
                 metrics=metrics,
                 lease_seconds=(self.settings.worker_lease_seconds),
             )
@@ -475,6 +537,7 @@ class VideoProcessingWorker:
         self,
         *,
         job_id: UUID,
+        pipeline_version: str,
         metrics: dict[str, object],
     ) -> None:
         async with AsyncSessionFactory() as session:
@@ -483,6 +546,7 @@ class VideoProcessingWorker:
             await repository.mark_succeeded(
                 job_id=job_id,
                 worker_id=self.worker_id,
+                pipeline_version=pipeline_version,
                 metrics=metrics,
             )
 

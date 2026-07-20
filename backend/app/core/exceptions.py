@@ -118,3 +118,17 @@ class InvalidEvidenceKeyError(Exception):
         self.key = key
 
         super().__init__("The stored evidence key is invalid.")
+
+
+class InvalidCameraSceneConfigurationError(Exception):
+    """Raised when a stored camera scene cannot be validated."""
+
+    def __init__(
+        self,
+        camera_id: UUID,
+    ) -> None:
+        self.camera_id = camera_id
+
+        super().__init__(
+            f"Camera '{camera_id}' contains an invalid scene configuration."
+        )

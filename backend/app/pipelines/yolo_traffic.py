@@ -26,6 +26,9 @@ from app.reasoning.triple_riding import (
     TripleRidingTransitionType,
     TripleRidingViolationDetector,
 )
+from app.scene.annotation import (
+    annotate_scene,
+)
 from app.tracking.annotation import annotate_tracks
 from app.tracking.multi_object import MultiObjectTracker
 
@@ -67,6 +70,8 @@ class YoloTrafficPipeline:
         self.no_helmet_detector = no_helmet_detector
 
         self.frame_stride = frame_stride
+
+        self.scene_configuration = None
 
         self.frames_seen = 0
         self.frames_analyzed = 0
@@ -114,6 +119,8 @@ class YoloTrafficPipeline:
         context: VideoContext,
     ) -> None:
         """Reset all state before processing a video."""
+
+        self.scene_configuration = context.scene_configuration
 
         self.tracker.reset()
         self.rider_smoother.reset()
@@ -284,8 +291,13 @@ class YoloTrafficPipeline:
 
             self.unique_no_helmet_person_ids.add(transition.person_track_id)
 
-        track_annotated_frame = annotate_tracks(
+        scene_annotated_frame = annotate_scene(
             packet.image,
+            self.scene_configuration,
+        )
+
+        track_annotated_frame = annotate_tracks(
+            scene_annotated_frame,
             tracking_result.tracks,
         )
 
@@ -371,6 +383,33 @@ class YoloTrafficPipeline:
                 "helmet_detector_enabled": (self.helmet_detector.enabled),
                 "helmet_detector_model": (self.helmet_detector.model_name),
                 "helmet_detector_device": (self.helmet_detector.device),
+                "scene_configured": bool(
+                    self.scene_configuration
+                    and (
+                        self.scene_configuration.monitoring_zone is not None
+                        or self.scene_configuration.lanes
+                        or self.scene_configuration.stop_lines
+                        or self.scene_configuration.traffic_light_regions
+                    )
+                ),
+                "scene_enabled_violations": (
+                    [
+                        violation.value
+                        for violation in self.scene_configuration.enabled_violations
+                    ]
+                    if self.scene_configuration is not None
+                    else []
+                ),
+                "scene_lane_count": (
+                    len(self.scene_configuration.lanes)
+                    if self.scene_configuration is not None
+                    else 0
+                ),
+                "scene_stop_line_count": (
+                    len(self.scene_configuration.stop_lines)
+                    if self.scene_configuration is not None
+                    else 0
+                ),
                 "frame_stride": self.frame_stride,
                 "frames_seen": self.frames_seen,
                 "frames_analyzed": (self.frames_analyzed),

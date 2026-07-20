@@ -8,6 +8,9 @@ from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from app.detection.types import Detection
+    from app.schemas.camera_scene import (
+        CameraSceneConfiguration,
+    )
     from app.reasoning.helmet_rider import (
         HelmetRiderAssociation,
     )
@@ -37,6 +40,10 @@ class VideoContext:
     height: int
     frames_per_second: float | None
     expected_frame_count: int | None
+
+    camera_id: str | None = None
+
+    scene_configuration: CameraSceneConfiguration | None = None
 
 
 @dataclass(frozen=True)
