@@ -12,6 +12,11 @@ from app.models.enums import (
     ViolationType,
 )
 from app.models.violation_event import ViolationEvent
+from app.reasoning.no_helmet import (
+    NoHelmetTransition,
+    NoHelmetTransitionType,
+    NoHelmetViolationSnapshot,
+)
 from app.reasoning.triple_riding import (
     TripleRidingTransition,
     TripleRidingTransitionType,
@@ -175,6 +180,125 @@ class ViolationEventLifecycleService:
 
         return tuple(persisted_events)
 
+    async def persist_no_helmet_transitions(
+        self,
+        *,
+        processing_job_id: UUID,
+        video_id: UUID,
+        camera_id: UUID | None,
+        video_created_at: datetime,
+        transitions: tuple[
+            NoHelmetTransition,
+            ...,
+        ],
+        states: tuple[
+            NoHelmetViolationSnapshot,
+            ...,
+        ],
+        tracks: tuple[TrackedObject, ...],
+    ) -> tuple[ViolationEvent, ...]:
+        """Create or update durable no-helmet events."""
+
+        if not transitions:
+            return ()
+
+        states_by_person = {state.person_track_id: state for state in states}
+
+        tracks_by_id = {track.track_id: track for track in tracks}
+
+        persisted_events: list[ViolationEvent] = []
+
+        for transition in transitions:
+            event_key = self.build_no_helmet_event_key(
+                processing_job_id=(processing_job_id),
+                transition=transition,
+            )
+
+            event = await self.repository.get_by_event_key(
+                event_key,
+                for_update=True,
+            )
+
+            state = states_by_person.get(transition.person_track_id)
+
+            detection_confidence = (
+                state.detection_confidence
+                if state is not None
+                else transition.detection_confidence
+            )
+
+            rule_confidence = (
+                state.association_score
+                if state is not None
+                else transition.association_score
+            )
+
+            geometry = self._build_no_helmet_geometry(
+                transition=transition,
+                tracks_by_id=tracks_by_id,
+            )
+
+            existing_metadata = event.event_metadata if event is not None else {}
+
+            event_metadata = self._merge_no_helmet_metadata(
+                existing_metadata=(existing_metadata),
+                transition=transition,
+            )
+
+            if event is None:
+                occurred_at = self._calculate_occurred_at(
+                    video_created_at=(video_created_at),
+                    transition=transition,
+                )
+
+                event = ViolationEvent(
+                    video_id=video_id,
+                    camera_id=camera_id,
+                    processing_job_id=(processing_job_id),
+                    event_key=event_key,
+                    violation_type=(ViolationType.NO_HELMET),
+                    review_status=(ReviewStatus.PENDING),
+                    occurred_at=occurred_at,
+                    frame_number=(
+                        transition.confirmed_frame or transition.frame_number
+                    ),
+                    track_id=str(transition.person_track_id),
+                    license_plate=None,
+                    detection_confidence=(detection_confidence),
+                    rule_confidence=(rule_confidence),
+                    ocr_confidence=None,
+                    evidence_image_key=None,
+                    evidence_clip_key=None,
+                    geometry=geometry,
+                    event_metadata=event_metadata,
+                )
+
+                await self.repository.create(event)
+
+            else:
+                event.camera_id = event.camera_id or camera_id
+
+                event.event_metadata = event_metadata
+
+                if geometry:
+                    event.geometry = geometry
+
+                event.detection_confidence = max(
+                    event.detection_confidence or 0.0,
+                    detection_confidence,
+                )
+
+                event.rule_confidence = max(
+                    event.rule_confidence or 0.0,
+                    rule_confidence,
+                )
+
+            persisted_events.append(event)
+
+        await self.repository.commit()
+
+        return tuple(persisted_events)
+
     async def attach_preview_to_job_events(
         self,
         *,
@@ -220,6 +344,20 @@ class ViolationEventLifecycleService:
             f"{processing_job_id}:"
             f"{transition.motorcycle_track_id}:"
             f"{anchor_frame}"
+        )
+
+    @staticmethod
+    def build_no_helmet_event_key(
+        *,
+        processing_job_id: UUID,
+        transition: NoHelmetTransition,
+    ) -> str:
+        """Build a stable key for a rider violation."""
+
+        anchor_frame = transition.confirmed_frame or transition.first_candidate_frame
+
+        return (
+            f"no_helmet:{processing_job_id}:{transition.person_track_id}:{anchor_frame}"
         )
 
     @classmethod
@@ -327,6 +465,133 @@ class ViolationEventLifecycleService:
             )
 
         return metadata
+
+    @classmethod
+    def _merge_no_helmet_metadata(
+        cls,
+        *,
+        existing_metadata: dict[str, Any],
+        transition: NoHelmetTransition,
+    ) -> dict[str, Any]:
+        """Merge a no-helmet lifecycle transition."""
+
+        metadata = dict(existing_metadata or {})
+
+        history = [
+            dict(entry)
+            for entry in metadata.get(
+                "transition_history",
+                [],
+            )
+            if isinstance(entry, dict)
+        ]
+
+        transition_entry = {
+            "type": (transition.transition_type.value),
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "detection_confidence": (transition.detection_confidence),
+            "association_score": (transition.association_score),
+        }
+
+        identity = (
+            transition_entry["type"],
+            transition_entry["frame_number"],
+        )
+
+        already_recorded = any(
+            (
+                entry.get("type"),
+                entry.get("frame_number"),
+            )
+            == identity
+            for entry in history
+        )
+
+        if not already_recorded:
+            history.append(transition_entry)
+
+        start_timestamp_seconds = max(
+            transition.timestamp_seconds - transition.duration_seconds,
+            0.0,
+        )
+
+        metadata.update(
+            {
+                "schema_version": "1.0",
+                "person_track_id": (transition.person_track_id),
+                "motorcycle_track_id": (transition.motorcycle_track_id),
+                "detection_confidence": (transition.detection_confidence),
+                "association_score": (transition.association_score),
+                "first_candidate_frame": (transition.first_candidate_frame),
+                "confirmed_frame": (transition.confirmed_frame),
+                "start_timestamp_seconds": (
+                    metadata.get(
+                        "start_timestamp_seconds",
+                        start_timestamp_seconds,
+                    )
+                ),
+                "last_transition_type": (transition.transition_type.value),
+                "last_transition_frame": (transition.frame_number),
+                "last_timestamp_seconds": (transition.timestamp_seconds),
+                "transition_history": history,
+            }
+        )
+
+        if transition.transition_type == NoHelmetTransitionType.STARTED:
+            if metadata.get("lifecycle_status") != "ended":
+                metadata["lifecycle_status"] = "active"
+
+            metadata.setdefault(
+                "start_frame",
+                transition.frame_number,
+            )
+
+            metadata.setdefault(
+                "duration_seconds",
+                0.0,
+            )
+
+        elif transition.transition_type == NoHelmetTransitionType.ENDED:
+            metadata.update(
+                {
+                    "lifecycle_status": "ended",
+                    "end_frame": (transition.frame_number),
+                    "end_timestamp_seconds": (transition.timestamp_seconds),
+                    "duration_seconds": (transition.duration_seconds),
+                }
+            )
+
+        return metadata
+
+    @classmethod
+    def _build_no_helmet_geometry(
+        cls,
+        *,
+        transition: NoHelmetTransition,
+        tracks_by_id: dict[
+            int,
+            TrackedObject,
+        ],
+    ) -> dict[str, Any]:
+        """Capture rider and motorcycle geometry."""
+
+        person = tracks_by_id.get(transition.person_track_id)
+
+        motorcycle = tracks_by_id.get(transition.motorcycle_track_id)
+
+        geometry: dict[str, Any] = {
+            "person_track_id": (transition.person_track_id),
+            "motorcycle_track_id": (transition.motorcycle_track_id),
+        }
+
+        if person is not None:
+            geometry["person"] = cls._serialize_track_geometry(person)
+
+        if motorcycle is not None:
+            geometry["motorcycle"] = cls._serialize_track_geometry(motorcycle)
+
+        return geometry
 
     @staticmethod
     def _calculate_occurred_at(

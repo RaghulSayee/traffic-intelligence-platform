@@ -282,7 +282,7 @@ class VideoProcessingWorker:
                     analysis=analysis,
                 )
 
-                if analysis.triple_riding_transitions:
+                if analysis.triple_riding_transitions or analysis.no_helmet_transitions:
                     await self._persist_violation_transitions(
                         job=job,
                         video=video,
@@ -377,19 +377,35 @@ class VideoProcessingWorker:
         async with AsyncSessionFactory() as session:
             service = ViolationEventLifecycleService(session)
 
-            await service.persist_triple_riding_transitions(
-                processing_job_id=job.id,
-                video_id=video.id,
-                camera_id=getattr(
-                    video,
-                    "camera_id",
-                    None,
-                ),
-                video_created_at=(video.created_at),
-                transitions=(analysis.triple_riding_transitions),
-                states=(analysis.triple_riding_states),
-                tracks=analysis.tracks,
-            )
+            if analysis.triple_riding_transitions:
+                await service.persist_triple_riding_transitions(
+                    processing_job_id=job.id,
+                    video_id=video.id,
+                    camera_id=getattr(
+                        video,
+                        "camera_id",
+                        None,
+                    ),
+                    video_created_at=(video.created_at),
+                    transitions=(analysis.triple_riding_transitions),
+                    states=(analysis.triple_riding_states),
+                    tracks=analysis.tracks,
+                )
+
+            if analysis.no_helmet_transitions:
+                await service.persist_no_helmet_transitions(
+                    processing_job_id=job.id,
+                    video_id=video.id,
+                    camera_id=getattr(
+                        video,
+                        "camera_id",
+                        None,
+                    ),
+                    video_created_at=(video.created_at),
+                    transitions=(analysis.no_helmet_transitions),
+                    states=(analysis.no_helmet_states),
+                    tracks=analysis.tracks,
+                )
 
     async def _attach_violation_preview(
         self,

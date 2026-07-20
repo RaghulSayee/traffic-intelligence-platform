@@ -8,6 +8,13 @@ from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from app.detection.types import Detection
+    from app.reasoning.helmet_rider import (
+        HelmetRiderAssociation,
+    )
+    from app.reasoning.no_helmet import (
+        NoHelmetTransition,
+        NoHelmetViolationSnapshot,
+    )
     from app.reasoning.temporal_rider import (
         TemporalRiderAssociation,
     )
@@ -51,10 +58,20 @@ class FrameAnalysis:
 
     detections: tuple[Detection, ...] = ()
 
+    helmet_detections: tuple[
+        Detection,
+        ...,
+    ] = ()
+
     tracks: tuple[TrackedObject, ...] = ()
 
     rider_associations: tuple[
         TemporalRiderAssociation,
+        ...,
+    ] = ()
+
+    helmet_rider_associations: tuple[
+        HelmetRiderAssociation,
         ...,
     ] = ()
 
@@ -65,6 +82,16 @@ class FrameAnalysis:
 
     triple_riding_transitions: tuple[
         TripleRidingTransition,
+        ...,
+    ] = ()
+
+    no_helmet_states: tuple[
+        NoHelmetViolationSnapshot,
+        ...,
+    ] = ()
+
+    no_helmet_transitions: tuple[
+        NoHelmetTransition,
         ...,
     ] = ()
 

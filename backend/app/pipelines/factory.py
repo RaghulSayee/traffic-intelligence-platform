@@ -20,6 +20,12 @@ from app.pipelines.yolo_traffic import (
 from app.tracking.multi_object import (
     MultiObjectTracker,
 )
+from app.reasoning.helmet_rider import (
+    HelmetRiderAssociator,
+)
+from app.reasoning.no_helmet import (
+    NoHelmetViolationDetector,
+)
 from app.reasoning.rider_motorcycle import (
     RiderMotorcycleAssociator,
 )
@@ -99,10 +105,13 @@ class VideoPipelineFactory:
 
         return YoloTrafficPipeline(
             detector=self._get_traffic_detector(),
+            helmet_detector=self.get_helmet_detector(),
             tracker=self._create_tracker(),
             rider_associator=(self._create_rider_associator()),
             rider_smoother=(self._create_rider_smoother()),
+            helmet_rider_associator=(self._create_helmet_rider_associator()),
             triple_riding_detector=(self._create_triple_riding_detector()),
+            no_helmet_detector=(self._create_no_helmet_detector()),
             frame_stride=(self.settings.detector_frame_stride),
         )
 
@@ -166,6 +175,30 @@ class VideoPipelineFactory:
             confirmation_frames=(self.settings.rider_temporal_confirmation_frames),
             maximum_missed_frames=(self.settings.rider_temporal_max_missed_frames),
             score_alpha=(self.settings.rider_temporal_score_alpha),
+        )
+
+    def _create_helmet_rider_associator(
+        self,
+    ) -> HelmetRiderAssociator:
+        """Create helmet-to-rider spatial reasoning."""
+
+        return HelmetRiderAssociator(
+            head_height_ratio=(self.settings.helmet_head_height_ratio),
+            head_width_expansion_ratio=(
+                self.settings.helmet_head_width_expansion_ratio
+            ),
+            minimum_score=(self.settings.helmet_rider_minimum_score),
+        )
+
+    def _create_no_helmet_detector(
+        self,
+    ) -> NoHelmetViolationDetector:
+        """Create temporal no-helmet state."""
+
+        return NoHelmetViolationDetector(
+            confirmation_frames=(self.settings.no_helmet_confirmation_frames),
+            maximum_missed_frames=(self.settings.no_helmet_maximum_missed_frames),
+            confidence_alpha=(self.settings.no_helmet_confidence_alpha),
         )
 
     def _create_triple_riding_detector(

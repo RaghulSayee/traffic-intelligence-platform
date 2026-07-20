@@ -14,6 +14,13 @@ from app.pipelines.base import (
     FrameAnalysis,
     FramePacket,
 )
+from app.reasoning.helmet_rider import (
+    HelmetRiderAssociation,
+)
+from app.reasoning.no_helmet import (
+    NoHelmetTransition,
+    NoHelmetViolationSnapshot,
+)
 from app.reasoning.temporal_rider import (
     TemporalRiderAssociation,
 )
@@ -139,7 +146,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.2",
+            "schema_version": "1.3",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -149,6 +156,26 @@ class TrafficVideoArtifactWriter:
                 self._serialize_detection(detection)
                 for detection in analysis.detections
             ],
+            "helmet_analysis": {
+                "detections": [
+                    self._serialize_detection(detection)
+                    for detection in analysis.helmet_detections
+                ],
+                "rider_associations": [
+                    self._serialize_helmet_rider_association(association)
+                    for association in analysis.helmet_rider_associations
+                ],
+                "no_helmet": {
+                    "states": [
+                        self._serialize_no_helmet_state(state)
+                        for state in analysis.no_helmet_states
+                    ],
+                    "transitions": [
+                        self._serialize_no_helmet_transition(transition)
+                        for transition in analysis.no_helmet_transitions
+                    ],
+                },
+            },
             "tracks": [self._serialize_track(track) for track in analysis.tracks],
             "rider_associations": [
                 self._serialize_rider_association(association)
@@ -408,6 +435,71 @@ class TrafficVideoArtifactWriter:
                 "motion_similarity_score": (features.motion_similarity_score),
                 "containment_score": (features.containment_score),
             },
+        }
+
+    @staticmethod
+    def _serialize_helmet_rider_association(
+        association: HelmetRiderAssociation,
+    ) -> dict[str, Any]:
+        """Serialize a helmet-to-rider relationship."""
+
+        return {
+            "person_track_id": (association.person_track_id),
+            "motorcycle_track_id": (association.motorcycle_track_id),
+            "class_name": association.class_name,
+            "detection_confidence": (association.detection_confidence),
+            "association_score": (association.association_score),
+            "head_region": {
+                "x1": association.head_region.x1,
+                "y1": association.head_region.y1,
+                "x2": association.head_region.x2,
+                "y2": association.head_region.y2,
+            },
+            "detection_box": {
+                "x1": association.detection_box.x1,
+                "y1": association.detection_box.y1,
+                "x2": association.detection_box.x2,
+                "y2": association.detection_box.y2,
+            },
+        }
+
+    @staticmethod
+    def _serialize_no_helmet_state(
+        state: NoHelmetViolationSnapshot,
+    ) -> dict[str, Any]:
+        """Serialize a no-helmet state."""
+
+        return {
+            "person_track_id": state.person_track_id,
+            "motorcycle_track_id": (state.motorcycle_track_id),
+            "detection_confidence": (state.detection_confidence),
+            "association_score": (state.association_score),
+            "first_candidate_frame": (state.first_candidate_frame),
+            "confirmed_frame": state.confirmed_frame,
+            "last_violation_frame": (state.last_violation_frame),
+            "consecutive_violation_frames": (state.consecutive_violation_frames),
+            "missed_frames": state.missed_frames,
+            "confirmed": state.confirmed,
+            "observed_this_frame": (state.observed_this_frame),
+        }
+
+    @staticmethod
+    def _serialize_no_helmet_transition(
+        transition: NoHelmetTransition,
+    ) -> dict[str, Any]:
+        """Serialize a no-helmet lifecycle transition."""
+
+        return {
+            "transition_type": (transition.transition_type.value),
+            "person_track_id": (transition.person_track_id),
+            "motorcycle_track_id": (transition.motorcycle_track_id),
+            "detection_confidence": (transition.detection_confidence),
+            "association_score": (transition.association_score),
+            "frame_number": transition.frame_number,
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "first_candidate_frame": (transition.first_candidate_frame),
+            "confirmed_frame": (transition.confirmed_frame),
+            "duration_seconds": (transition.duration_seconds),
         }
 
     @staticmethod
