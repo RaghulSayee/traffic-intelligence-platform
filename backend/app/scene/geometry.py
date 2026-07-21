@@ -168,3 +168,80 @@ def _validate_image_dimensions(
 
     if image_height <= 0:
         raise ValueError("Image height must be positive.")
+
+
+FloatPoint = tuple[float, float]
+
+
+def point_to_line_segment_distance(
+    *,
+    point: FloatPoint,
+    start: FloatPoint,
+    end: FloatPoint,
+) -> float:
+    """Return the shortest pixel distance to a line segment."""
+
+    point_x, point_y = point
+    start_x, start_y = start
+    end_x, end_y = end
+
+    segment_x = end_x - start_x
+    segment_y = end_y - start_y
+
+    segment_length_squared = segment_x * segment_x + segment_y * segment_y
+
+    if segment_length_squared == 0:
+        return hypot(
+            point_x - start_x,
+            point_y - start_y,
+        )
+
+    projection = (
+        (point_x - start_x) * segment_x + (point_y - start_y) * segment_y
+    ) / segment_length_squared
+
+    projection = min(
+        max(projection, 0.0),
+        1.0,
+    )
+
+    nearest_x = start_x + projection * segment_x
+
+    nearest_y = start_y + projection * segment_y
+
+    return hypot(
+        point_x - nearest_x,
+        point_y - nearest_y,
+    )
+
+
+def point_to_polygon_edge_distance(
+    *,
+    point: FloatPoint,
+    polygon: tuple[PixelPoint, ...],
+) -> float:
+    """Return the shortest pixel distance to a polygon edge."""
+
+    if len(polygon) < 3:
+        raise ValueError("A polygon requires at least three points.")
+
+    distances = []
+
+    for index, start in enumerate(polygon):
+        end = polygon[(index + 1) % len(polygon)]
+
+        distances.append(
+            point_to_line_segment_distance(
+                point=point,
+                start=(
+                    float(start[0]),
+                    float(start[1]),
+                ),
+                end=(
+                    float(end[0]),
+                    float(end[1]),
+                ),
+            )
+        )
+
+    return min(distances)

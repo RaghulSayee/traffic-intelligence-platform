@@ -11,6 +11,8 @@ from app.scene.geometry import (
     normalized_line_to_pixels,
     normalized_point_in_polygon,
     normalized_point_to_pixel,
+    point_to_line_segment_distance,
+    point_to_polygon_edge_distance,
 )
 
 
@@ -126,3 +128,51 @@ def test_rejects_invalid_image_dimensions() -> None:
             image_width=0,
             image_height=100,
         )
+
+
+def test_point_to_line_segment_distance() -> None:
+    distance = point_to_line_segment_distance(
+        point=(
+            5.0,
+            5.0,
+        ),
+        start=(
+            0.0,
+            0.0,
+        ),
+        end=(
+            10.0,
+            0.0,
+        ),
+    )
+
+    assert distance == pytest.approx(5.0)
+
+
+def test_point_to_polygon_edge_distance() -> None:
+    distance = point_to_polygon_edge_distance(
+        point=(
+            15.0,
+            5.0,
+        ),
+        polygon=(
+            (
+                0,
+                0,
+            ),
+            (
+                10,
+                0,
+            ),
+            (
+                10,
+                10,
+            ),
+            (
+                0,
+                10,
+            ),
+        ),
+    )
+
+    assert distance == pytest.approx(5.0)

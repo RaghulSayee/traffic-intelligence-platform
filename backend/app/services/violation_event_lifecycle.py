@@ -27,6 +27,9 @@ from app.reasoning.wrong_way import (
     WrongWayTransitionType,
     WrongWayViolationSnapshot,
 )
+from app.services.lane_violation_lifecycle import (
+    LaneViolationLifecycleMixin,
+)
 from app.repositories.violation_event import (
     ViolationEventRepository,
 )
@@ -58,7 +61,7 @@ class ViolationEventStore(Protocol):
     async def commit(self) -> None: ...
 
 
-class ViolationEventLifecycleService:
+class ViolationEventLifecycleService(LaneViolationLifecycleMixin):
     """
     Convert reasoning transitions into durable violation events.
 

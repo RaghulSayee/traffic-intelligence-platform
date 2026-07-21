@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     wrong_way_confirmation_frames: int = 3
     wrong_way_maximum_missed_frames: int = 2
 
+    lane_violation_minimum_speed_pixels_per_second: float = 15.0
+    lane_violation_boundary_tolerance_pixels: float = 12.0
+    lane_violation_confirmation_frames: int = 3
+    lane_violation_maximum_missed_frames: int = 2
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

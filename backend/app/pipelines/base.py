@@ -14,6 +14,13 @@ if TYPE_CHECKING:
     from app.reasoning.helmet_rider import (
         HelmetRiderAssociation,
     )
+    from app.reasoning.lane_occupancy import (
+        LaneOccupancyObservation,
+    )
+    from app.reasoning.lane_violation import (
+        LaneViolationSnapshot,
+        LaneViolationTransition,
+    )
     from app.reasoning.no_helmet import (
         NoHelmetTransition,
         NoHelmetViolationSnapshot,
@@ -113,6 +120,21 @@ class FrameAnalysis:
 
     wrong_way_transitions: tuple[
         WrongWayTransition,
+        ...,
+    ] = ()
+
+    lane_occupancy_observations: tuple[
+        LaneOccupancyObservation,
+        ...,
+    ] = ()
+
+    lane_violation_states: tuple[
+        LaneViolationSnapshot,
+        ...,
+    ] = ()
+
+    lane_violation_transitions: tuple[
+        LaneViolationTransition,
         ...,
     ] = ()
 
