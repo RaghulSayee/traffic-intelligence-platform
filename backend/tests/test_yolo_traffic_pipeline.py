@@ -15,6 +15,9 @@ from app.pipelines.base import (
 from app.pipelines.yolo_traffic import (
     YoloTrafficPipeline,
 )
+from app.reasoning.wrong_way import (
+    WrongWayViolationDetector,
+)
 from app.tracking.multi_object import (
     MultiObjectTracker,
 )
@@ -280,6 +283,7 @@ def create_reasoning_pipeline(
     *,
     detector,
     helmet_detector=None,
+    wrong_way_detector=None,
     frame_stride: int = 1,
     temporal_confirmation_frames: int = 1,
     violation_confirmation_frames: int = 1,
@@ -323,6 +327,15 @@ def create_reasoning_pipeline(
                 confirmation_frames=2,
                 maximum_missed_frames=1,
                 confidence_alpha=0.40,
+            )
+        ),
+        wrong_way_detector=(
+            wrong_way_detector
+            or WrongWayViolationDetector(
+                minimum_speed_pixels_per_second=20.0,
+                opposite_cosine_threshold=-0.50,
+                confirmation_frames=2,
+                maximum_missed_frames=1,
             )
         ),
         frame_stride=frame_stride,

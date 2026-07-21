@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     triple_riding_confirmation_frames: int = 3
     triple_riding_maximum_missed_frames: int = 2
 
+    wrong_way_minimum_speed_pixels_per_second: float = 20.0
+    wrong_way_opposite_cosine_threshold: float = -0.50
+    wrong_way_confirmation_frames: int = 3
+    wrong_way_maximum_missed_frames: int = 2
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

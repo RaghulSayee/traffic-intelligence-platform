@@ -25,6 +25,10 @@ if TYPE_CHECKING:
         TripleRidingTransition,
         TripleRidingViolationSnapshot,
     )
+    from app.reasoning.wrong_way import (
+        WrongWayTransition,
+        WrongWayViolationSnapshot,
+    )
     from app.tracking.types import TrackedObject
 
 
@@ -99,6 +103,16 @@ class FrameAnalysis:
 
     no_helmet_transitions: tuple[
         NoHelmetTransition,
+        ...,
+    ] = ()
+
+    wrong_way_states: tuple[
+        WrongWayViolationSnapshot,
+        ...,
+    ] = ()
+
+    wrong_way_transitions: tuple[
+        WrongWayTransition,
         ...,
     ] = ()
 

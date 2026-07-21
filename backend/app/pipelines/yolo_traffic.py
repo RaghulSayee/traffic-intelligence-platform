@@ -26,6 +26,13 @@ from app.reasoning.triple_riding import (
     TripleRidingTransitionType,
     TripleRidingViolationDetector,
 )
+from app.reasoning.wrong_way import (
+    WrongWayTransitionType,
+    WrongWayViolationDetector,
+)
+from app.reasoning.wrong_way_annotation import (
+    annotate_wrong_way,
+)
 from app.scene.annotation import (
     annotate_scene,
 )
@@ -37,7 +44,7 @@ class YoloTrafficPipeline:
     """Detect, track, and reason about traffic objects."""
 
     name = "yolo-traffic-pipeline"
-    version = "0.5.0"
+    version = "0.6.0"
 
     def __init__(
         self,
@@ -50,6 +57,7 @@ class YoloTrafficPipeline:
         helmet_rider_associator: HelmetRiderAssociator,
         triple_riding_detector: TripleRidingViolationDetector,
         no_helmet_detector: NoHelmetViolationDetector,
+        wrong_way_detector: WrongWayViolationDetector,
         frame_stride: int,
     ) -> None:
         if frame_stride <= 0:
@@ -68,6 +76,8 @@ class YoloTrafficPipeline:
         self.triple_riding_detector = triple_riding_detector
 
         self.no_helmet_detector = no_helmet_detector
+
+        self.wrong_way_detector = wrong_way_detector
 
         self.frame_stride = frame_stride
 
@@ -106,13 +116,17 @@ class YoloTrafficPipeline:
 
         self.total_helmet_rider_associations = 0
         self.maximum_active_no_helmet_violations = 0
+        self.maximum_active_wrong_way_violations = 0
 
         self.triple_riding_event_count = 0
         self.no_helmet_event_count = 0
+        self.wrong_way_event_count = 0
 
         self.unique_triple_riding_motorcycle_ids: set[int] = set()
 
         self.unique_no_helmet_person_ids: set[int] = set()
+
+        self.unique_wrong_way_track_ids: set[int] = set()
 
     def start(
         self,
@@ -127,6 +141,7 @@ class YoloTrafficPipeline:
 
         self.triple_riding_detector.reset()
         self.no_helmet_detector.reset()
+        self.wrong_way_detector.reset()
 
         self.frames_seen = 0
         self.frames_analyzed = 0
@@ -151,12 +166,15 @@ class YoloTrafficPipeline:
 
         self.total_helmet_rider_associations = 0
         self.maximum_active_no_helmet_violations = 0
+        self.maximum_active_wrong_way_violations = 0
 
         self.triple_riding_event_count = 0
         self.no_helmet_event_count = 0
+        self.wrong_way_event_count = 0
 
         self.unique_triple_riding_motorcycle_ids = set()
         self.unique_no_helmet_person_ids = set()
+        self.unique_wrong_way_track_ids = set()
 
     def process_frame(
         self,
@@ -202,6 +220,17 @@ class YoloTrafficPipeline:
             frame_number=packet.frame_number,
             timestamp_seconds=(packet.timestamp_seconds),
             associations=(helmet_association_result),
+        )
+
+        image_height, image_width = packet.image.shape[:2]
+
+        wrong_way_result = self.wrong_way_detector.update(
+            frame_number=packet.frame_number,
+            timestamp_seconds=(packet.timestamp_seconds),
+            tracks=tracking_result.tracks,
+            scene=self.scene_configuration,
+            image_width=image_width,
+            image_height=image_height,
         )
 
         confirmed_tracks = tracking_result.confirmed_tracks
@@ -257,6 +286,11 @@ class YoloTrafficPipeline:
             len(no_helmet_result.active_violations),
         )
 
+        self.maximum_active_wrong_way_violations = max(
+            self.maximum_active_wrong_way_violations,
+            len(wrong_way_result.active_violations),
+        )
+
         self._merge_class_counts(
             destination=(self.detection_class_counts),
             frame_counts=detection_class_counts,
@@ -291,6 +325,14 @@ class YoloTrafficPipeline:
 
             self.unique_no_helmet_person_ids.add(transition.person_track_id)
 
+        for transition in wrong_way_result.transitions:
+            if transition.transition_type != WrongWayTransitionType.STARTED:
+                continue
+
+            self.wrong_way_event_count += 1
+
+            self.unique_wrong_way_track_ids.add(transition.track_id)
+
         scene_annotated_frame = annotate_scene(
             packet.image,
             self.scene_configuration,
@@ -310,6 +352,12 @@ class YoloTrafficPipeline:
             no_helmet_violations=(no_helmet_result.states),
         )
 
+        annotated_frame = annotate_wrong_way(
+            annotated_frame,
+            tracks=tracking_result.tracks,
+            violations=wrong_way_result.states,
+        )
+
         return FrameAnalysis(
             analyzed=True,
             detections=(detection_result.detections),
@@ -321,6 +369,8 @@ class YoloTrafficPipeline:
             triple_riding_transitions=(triple_riding_result.transitions),
             no_helmet_states=(no_helmet_result.states),
             no_helmet_transitions=(no_helmet_result.transitions),
+            wrong_way_states=(wrong_way_result.states),
+            wrong_way_transitions=(wrong_way_result.transitions),
             annotated_frame=annotated_frame,
             metrics={
                 "frame_number": (packet.frame_number),
@@ -350,6 +400,13 @@ class YoloTrafficPipeline:
                 "triple_riding_transition_count": len(triple_riding_result.transitions),
                 "active_no_helmet_count": len(no_helmet_result.active_violations),
                 "no_helmet_transition_count": len(no_helmet_result.transitions),
+                "active_wrong_way_count": len(wrong_way_result.active_violations),
+                "wrong_way_transition_count": len(wrong_way_result.transitions),
+                "wrong_way_track_ids": [
+                    state.track_id
+                    for state in wrong_way_result.states
+                    if state.confirmed
+                ],
                 "removed_track_ids": list(tracking_result.removed_track_ids),
                 "removed_rider_pairs": [
                     list(pair) for pair in temporal_associations.removed_pairs
@@ -446,6 +503,12 @@ class YoloTrafficPipeline:
                 "no_helmet_event_count": (self.no_helmet_event_count),
                 "unique_no_helmet_riders": len(self.unique_no_helmet_person_ids),
                 "no_helmet_person_track_ids": sorted(self.unique_no_helmet_person_ids),
+                "wrong_way_event_count": (self.wrong_way_event_count),
+                "maximum_active_wrong_way_violations": (
+                    self.maximum_active_wrong_way_violations
+                ),
+                "unique_wrong_way_vehicles": len(self.unique_wrong_way_track_ids),
+                "wrong_way_track_ids": sorted(self.unique_wrong_way_track_ids),
             }
         )
 
