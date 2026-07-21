@@ -346,6 +346,7 @@ class VideoProcessingWorker:
                     analysis.triple_riding_transitions
                     or analysis.no_helmet_transitions
                     or analysis.wrong_way_transitions
+                    or analysis.lane_violation_transitions
                 ):
                     await self._persist_violation_transitions(
                         job=job,
@@ -469,6 +470,20 @@ class VideoProcessingWorker:
                 video_created_at=(video.created_at),
                 transitions=(analysis.wrong_way_transitions),
                 states=(analysis.wrong_way_states),
+                tracks=analysis.tracks,
+            )
+
+            await service.persist_lane_violation_transitions(
+                processing_job_id=job.id,
+                video_id=video.id,
+                camera_id=getattr(
+                    video,
+                    "camera_id",
+                    None,
+                ),
+                video_created_at=video.created_at,
+                transitions=(analysis.lane_violation_transitions),
+                states=(analysis.lane_violation_states),
                 tracks=analysis.tracks,
             )
 

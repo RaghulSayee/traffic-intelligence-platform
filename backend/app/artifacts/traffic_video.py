@@ -17,6 +17,13 @@ from app.pipelines.base import (
 from app.reasoning.helmet_rider import (
     HelmetRiderAssociation,
 )
+from app.reasoning.lane_occupancy import (
+    LaneOccupancyObservation,
+)
+from app.reasoning.lane_violation import (
+    LaneViolationSnapshot,
+    LaneViolationTransition,
+)
 from app.reasoning.no_helmet import (
     NoHelmetTransition,
     NoHelmetViolationSnapshot,
@@ -150,7 +157,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.4",
+            "schema_version": "1.5",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -177,6 +184,22 @@ class TrafficVideoArtifactWriter:
                     "transitions": [
                         self._serialize_no_helmet_transition(transition)
                         for transition in analysis.no_helmet_transitions
+                    ],
+                },
+            },
+            "lane_analysis": {
+                "occupancy": [
+                    self._serialize_lane_occupancy(observation)
+                    for observation in analysis.lane_occupancy_observations
+                ],
+                "violations": {
+                    "states": [
+                        self._serialize_lane_violation_state(state)
+                        for state in analysis.lane_violation_states
+                    ],
+                    "transitions": [
+                        self._serialize_lane_violation_transition(transition)
+                        for transition in analysis.lane_violation_transitions
                     ],
                 },
             },
@@ -337,6 +360,7 @@ class TrafficVideoArtifactWriter:
             analysis.triple_riding_transitions,
             analysis.no_helmet_transitions,
             analysis.wrong_way_transitions,
+            analysis.lane_violation_transitions,
         )
 
         has_started_violation = any(
@@ -575,6 +599,90 @@ class TrafficVideoArtifactWriter:
             "rider_track_ids": list(transition.rider_track_ids),
             "rider_count": (transition.rider_count),
             "peak_rider_count": (transition.peak_rider_count),
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "first_candidate_frame": (transition.first_candidate_frame),
+            "confirmed_frame": (transition.confirmed_frame),
+            "duration_seconds": (transition.duration_seconds),
+        }
+
+    @staticmethod
+    def _serialize_lane_occupancy(
+        observation: LaneOccupancyObservation,
+    ) -> dict[str, Any]:
+        """Serialize one lane occupancy observation."""
+
+        return {
+            "track_id": observation.track_id,
+            "class_name": observation.class_name,
+            "lane_id": observation.lane_id,
+            "nearest_lane_id": (observation.nearest_lane_id),
+            "anchor": {
+                "x_normalized": (observation.anchor_x_normalized),
+                "y_normalized": (observation.anchor_y_normalized),
+            },
+            "distance_to_nearest_lane_pixels": (
+                observation.distance_to_nearest_lane_pixels
+            ),
+            "velocity": {
+                "x_pixels_per_second": (observation.velocity_x),
+                "y_pixels_per_second": (observation.velocity_y),
+                "speed_pixels_per_second": (observation.speed_pixels_per_second),
+            },
+            "inside_monitoring_zone": (observation.inside_monitoring_zone),
+            "outside_configured_lanes": (observation.outside_configured_lanes),
+            "within_boundary_tolerance": (observation.within_boundary_tolerance),
+            "violation_candidate": (observation.violation_candidate),
+        }
+
+    @staticmethod
+    def _serialize_lane_violation_state(
+        state: LaneViolationSnapshot,
+    ) -> dict[str, Any]:
+        """Serialize one temporal lane state."""
+
+        return {
+            "track_id": state.track_id,
+            "class_name": state.class_name,
+            "nearest_lane_id": (state.nearest_lane_id),
+            "anchor": {
+                "x_normalized": (state.anchor_x_normalized),
+                "y_normalized": (state.anchor_y_normalized),
+            },
+            "distance_to_nearest_lane_pixels": (state.distance_to_nearest_lane_pixels),
+            "speed_pixels_per_second": (state.speed_pixels_per_second),
+            "first_candidate_frame": (state.first_candidate_frame),
+            "confirmed_frame": (state.confirmed_frame),
+            "last_violation_frame": (state.last_violation_frame),
+            "consecutive_violation_frames": (state.consecutive_violation_frames),
+            "missed_frames": state.missed_frames,
+            "confirmed": state.confirmed,
+            "observed_this_frame": (state.observed_this_frame),
+        }
+
+    @staticmethod
+    def _serialize_lane_violation_transition(
+        transition: LaneViolationTransition,
+    ) -> dict[str, Any]:
+        """Serialize one lane lifecycle transition."""
+
+        return {
+            "transition_type": (transition.transition_type.value),
+            "track_id": transition.track_id,
+            "class_name": transition.class_name,
+            "nearest_lane_id": (transition.nearest_lane_id),
+            "anchor": {
+                "x_normalized": (transition.anchor_x_normalized),
+                "y_normalized": (transition.anchor_y_normalized),
+            },
+            "distance_to_nearest_lane_pixels": (
+                transition.distance_to_nearest_lane_pixels
+            ),
+            "velocity": {
+                "x_pixels_per_second": (transition.velocity_x),
+                "y_pixels_per_second": (transition.velocity_y),
+                "speed_pixels_per_second": (transition.speed_pixels_per_second),
+            },
             "frame_number": (transition.frame_number),
             "timestamp_seconds": (transition.timestamp_seconds),
             "first_candidate_frame": (transition.first_candidate_frame),

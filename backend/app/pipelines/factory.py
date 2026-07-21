@@ -17,6 +17,12 @@ from app.pipelines.baseline import (
 from app.pipelines.yolo_traffic import (
     YoloTrafficPipeline,
 )
+from app.reasoning.lane_occupancy import (
+    LaneOccupancyAnalyzer,
+)
+from app.reasoning.lane_violation import (
+    LaneViolationDetector,
+)
 from app.reasoning.wrong_way import (
     WrongWayViolationDetector,
 )
@@ -116,6 +122,7 @@ class VideoPipelineFactory:
             triple_riding_detector=(self._create_triple_riding_detector()),
             no_helmet_detector=(self._create_no_helmet_detector()),
             wrong_way_detector=self._create_wrong_way_detector(),
+            lane_violation_detector=(self._create_lane_violation_detector()),
             frame_stride=(self.settings.detector_frame_stride),
         )
 
@@ -214,6 +221,26 @@ class VideoPipelineFactory:
             minimum_riders=(self.settings.triple_riding_minimum_riders),
             confirmation_frames=(self.settings.triple_riding_confirmation_frames),
             maximum_missed_frames=(self.settings.triple_riding_maximum_missed_frames),
+        )
+
+    def _create_lane_violation_detector(
+        self,
+    ) -> LaneViolationDetector:
+        """Create lane occupancy and temporal reasoning."""
+
+        occupancy_analyzer = LaneOccupancyAnalyzer(
+            minimum_speed_pixels_per_second=(
+                self.settings.lane_violation_minimum_speed_pixels_per_second
+            ),
+            boundary_tolerance_pixels=(
+                self.settings.lane_violation_boundary_tolerance_pixels
+            ),
+        )
+
+        return LaneViolationDetector(
+            occupancy_analyzer=occupancy_analyzer,
+            confirmation_frames=(self.settings.lane_violation_confirmation_frames),
+            maximum_missed_frames=(self.settings.lane_violation_maximum_missed_frames),
         )
 
     def _create_wrong_way_detector(

@@ -26,6 +26,13 @@ from app.reasoning.triple_riding import (
     TripleRidingTransitionType,
     TripleRidingViolationDetector,
 )
+from app.reasoning.lane_violation import (
+    LaneViolationDetector,
+    LaneViolationTransitionType,
+)
+from app.reasoning.lane_violation_annotation import (
+    annotate_lane_violations,
+)
 from app.reasoning.wrong_way import (
     WrongWayTransitionType,
     WrongWayViolationDetector,
@@ -44,7 +51,7 @@ class YoloTrafficPipeline:
     """Detect, track, and reason about traffic objects."""
 
     name = "yolo-traffic-pipeline"
-    version = "0.6.0"
+    version = "0.7.0"
 
     def __init__(
         self,
@@ -58,6 +65,7 @@ class YoloTrafficPipeline:
         triple_riding_detector: TripleRidingViolationDetector,
         no_helmet_detector: NoHelmetViolationDetector,
         wrong_way_detector: WrongWayViolationDetector,
+        lane_violation_detector: LaneViolationDetector,
         frame_stride: int,
     ) -> None:
         if frame_stride <= 0:
@@ -78,6 +86,8 @@ class YoloTrafficPipeline:
         self.no_helmet_detector = no_helmet_detector
 
         self.wrong_way_detector = wrong_way_detector
+
+        self.lane_violation_detector = lane_violation_detector
 
         self.frame_stride = frame_stride
 
@@ -117,16 +127,20 @@ class YoloTrafficPipeline:
         self.total_helmet_rider_associations = 0
         self.maximum_active_no_helmet_violations = 0
         self.maximum_active_wrong_way_violations = 0
+        self.maximum_active_lane_violations = 0
 
         self.triple_riding_event_count = 0
         self.no_helmet_event_count = 0
         self.wrong_way_event_count = 0
+        self.lane_violation_event_count = 0
 
         self.unique_triple_riding_motorcycle_ids: set[int] = set()
 
         self.unique_no_helmet_person_ids: set[int] = set()
 
         self.unique_wrong_way_track_ids: set[int] = set()
+
+        self.unique_lane_violation_track_ids: set[int] = set()
 
     def start(
         self,
@@ -142,6 +156,7 @@ class YoloTrafficPipeline:
         self.triple_riding_detector.reset()
         self.no_helmet_detector.reset()
         self.wrong_way_detector.reset()
+        self.lane_violation_detector.reset()
 
         self.frames_seen = 0
         self.frames_analyzed = 0
@@ -167,14 +182,17 @@ class YoloTrafficPipeline:
         self.total_helmet_rider_associations = 0
         self.maximum_active_no_helmet_violations = 0
         self.maximum_active_wrong_way_violations = 0
+        self.maximum_active_lane_violations = 0
 
         self.triple_riding_event_count = 0
         self.no_helmet_event_count = 0
         self.wrong_way_event_count = 0
+        self.lane_violation_event_count = 0
 
         self.unique_triple_riding_motorcycle_ids = set()
         self.unique_no_helmet_person_ids = set()
         self.unique_wrong_way_track_ids = set()
+        self.unique_lane_violation_track_ids = set()
 
     def process_frame(
         self,
@@ -225,6 +243,15 @@ class YoloTrafficPipeline:
         image_height, image_width = packet.image.shape[:2]
 
         wrong_way_result = self.wrong_way_detector.update(
+            frame_number=packet.frame_number,
+            timestamp_seconds=(packet.timestamp_seconds),
+            tracks=tracking_result.tracks,
+            scene=self.scene_configuration,
+            image_width=image_width,
+            image_height=image_height,
+        )
+
+        lane_violation_result = self.lane_violation_detector.update(
             frame_number=packet.frame_number,
             timestamp_seconds=(packet.timestamp_seconds),
             tracks=tracking_result.tracks,
@@ -291,6 +318,11 @@ class YoloTrafficPipeline:
             len(wrong_way_result.active_violations),
         )
 
+        self.maximum_active_lane_violations = max(
+            self.maximum_active_lane_violations,
+            len(lane_violation_result.active_violations),
+        )
+
         self._merge_class_counts(
             destination=(self.detection_class_counts),
             frame_counts=detection_class_counts,
@@ -333,6 +365,14 @@ class YoloTrafficPipeline:
 
             self.unique_wrong_way_track_ids.add(transition.track_id)
 
+        for transition in lane_violation_result.transitions:
+            if transition.transition_type != LaneViolationTransitionType.STARTED:
+                continue
+
+            self.lane_violation_event_count += 1
+
+            self.unique_lane_violation_track_ids.add(transition.track_id)
+
         scene_annotated_frame = annotate_scene(
             packet.image,
             self.scene_configuration,
@@ -358,6 +398,12 @@ class YoloTrafficPipeline:
             violations=wrong_way_result.states,
         )
 
+        annotated_frame = annotate_lane_violations(
+            annotated_frame,
+            tracks=tracking_result.tracks,
+            violations=(lane_violation_result.states),
+        )
+
         return FrameAnalysis(
             analyzed=True,
             detections=(detection_result.detections),
@@ -371,6 +417,9 @@ class YoloTrafficPipeline:
             no_helmet_transitions=(no_helmet_result.transitions),
             wrong_way_states=(wrong_way_result.states),
             wrong_way_transitions=(wrong_way_result.transitions),
+            lane_occupancy_observations=(lane_violation_result.occupancy.observations),
+            lane_violation_states=(lane_violation_result.states),
+            lane_violation_transitions=(lane_violation_result.transitions),
             annotated_frame=annotated_frame,
             metrics={
                 "frame_number": (packet.frame_number),
@@ -405,6 +454,23 @@ class YoloTrafficPipeline:
                 "wrong_way_track_ids": [
                     state.track_id
                     for state in wrong_way_result.states
+                    if state.confirmed
+                ],
+                "lane_occupancy_vehicle_count": len(
+                    lane_violation_result.occupancy.observations
+                ),
+                "lane_violation_candidate_count": len(
+                    lane_violation_result.occupancy.violation_candidates
+                ),
+                "active_lane_violation_count": len(
+                    lane_violation_result.active_violations
+                ),
+                "lane_violation_transition_count": len(
+                    lane_violation_result.transitions
+                ),
+                "lane_violation_track_ids": [
+                    state.track_id
+                    for state in lane_violation_result.states
                     if state.confirmed
                 ],
                 "removed_track_ids": list(tracking_result.removed_track_ids),
@@ -509,6 +575,14 @@ class YoloTrafficPipeline:
                 ),
                 "unique_wrong_way_vehicles": len(self.unique_wrong_way_track_ids),
                 "wrong_way_track_ids": sorted(self.unique_wrong_way_track_ids),
+                "lane_violation_event_count": (self.lane_violation_event_count),
+                "maximum_active_lane_violations": (self.maximum_active_lane_violations),
+                "unique_lane_violation_vehicles": len(
+                    self.unique_lane_violation_track_ids
+                ),
+                "lane_violation_track_ids": sorted(
+                    self.unique_lane_violation_track_ids
+                ),
             }
         )
 

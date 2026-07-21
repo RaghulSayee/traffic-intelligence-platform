@@ -90,7 +90,7 @@ def test_artifact_contains_wrong_way_analysis(
 
     writer.finish(
         pipeline_summary={
-            "pipeline_version": "0.6.0",
+            "pipeline_version": "0.7.0",
         }
     )
 
@@ -98,7 +98,7 @@ def test_artifact_contains_wrong_way_analysis(
 
     record = json.loads(detections_path.read_text(encoding="utf-8").splitlines()[0])
 
-    assert record["schema_version"] == "1.4"
+    assert record["schema_version"] == "1.5"
 
     wrong_way = record["road_rules"]["wrong_way"]
 

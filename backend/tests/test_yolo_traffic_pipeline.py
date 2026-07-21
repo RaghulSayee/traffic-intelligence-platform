@@ -15,6 +15,12 @@ from app.pipelines.base import (
 from app.pipelines.yolo_traffic import (
     YoloTrafficPipeline,
 )
+from app.reasoning.lane_occupancy import (
+    LaneOccupancyAnalyzer,
+)
+from app.reasoning.lane_violation import (
+    LaneViolationDetector,
+)
 from app.reasoning.wrong_way import (
     WrongWayViolationDetector,
 )
@@ -334,6 +340,18 @@ def create_reasoning_pipeline(
             or WrongWayViolationDetector(
                 minimum_speed_pixels_per_second=20.0,
                 opposite_cosine_threshold=-0.50,
+                confirmation_frames=2,
+                maximum_missed_frames=1,
+            )
+        ),
+        lane_violation_detector=(
+            LaneViolationDetector(
+                occupancy_analyzer=(
+                    LaneOccupancyAnalyzer(
+                        minimum_speed_pixels_per_second=15.0,
+                        boundary_tolerance_pixels=12.0,
+                    )
+                ),
                 confirmation_frames=2,
                 maximum_missed_frames=1,
             )
