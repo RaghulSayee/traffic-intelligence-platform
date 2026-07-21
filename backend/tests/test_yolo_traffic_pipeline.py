@@ -21,6 +21,9 @@ from app.reasoning.lane_occupancy import (
 from app.reasoning.lane_violation import (
     LaneViolationDetector,
 )
+from app.reasoning.red_light import (
+    RedLightCrossingDetector,
+)
 from app.reasoning.traffic_light_state import (
     TrafficLightStateClassifier,
 )
@@ -375,6 +378,15 @@ def create_reasoning_pipeline(
                 confirmation_frames=2,
                 maximum_unknown_frames=1,
                 confidence_alpha=0.40,
+            )
+        ),
+        red_light_detector=(
+            RedLightCrossingDetector(
+                minimum_speed_pixels_per_second=10.0,
+                minimum_direction_cosine=0.25,
+                line_crossing_tolerance_pixels=3.0,
+                minimum_signal_confidence=0.60,
+                maximum_missed_frames=2,
             )
         ),
         frame_stride=frame_stride,

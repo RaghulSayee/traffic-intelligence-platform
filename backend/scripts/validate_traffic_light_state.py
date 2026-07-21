@@ -396,9 +396,9 @@ def main() -> None:
 
     runtime_pipeline = VideoPipelineFactory(settings).create("yolo-traffic-pipeline")
 
-    assert YoloTrafficPipeline.version == "0.8.0"
+    assert YoloTrafficPipeline.version == "0.9.0"
 
-    assert runtime_pipeline.version == "0.8.0"
+    assert runtime_pipeline.version == "0.9.0"
 
     scene = create_scene()
 
@@ -526,7 +526,7 @@ def main() -> None:
     pipeline_summary = {
         "pipeline_name": ("yolo-traffic-pipeline"),
         "pipeline_version": (runtime_pipeline.version),
-        "artifact_schema_version": "1.6",
+        "artifact_schema_version": "1.7",
         "validation_type": ("synthetic-traffic-light-state"),
         "processed_frames": frame_number,
         "raw_state_counts": dict(raw_state_counts),
@@ -546,7 +546,7 @@ def main() -> None:
 
     assert len(records) == expected_frame_count
 
-    assert all(record["schema_version"] == "1.6" for record in records)
+    assert all(record["schema_version"] == "1.7" for record in records)
 
     artifact_raw_states = {
         observation["state"]
@@ -631,7 +631,7 @@ def main() -> None:
 
     print(
         "Artifact schema version:",
-        "1.6",
+        "1.7",
     )
 
     print(

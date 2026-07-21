@@ -7,6 +7,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
+    from app.reasoning.red_light import (
+        RedLightCrossingObservation,
+        RedLightViolationTransition,
+    )
     from app.reasoning.traffic_light_state import (
         TrafficLightObservation,
     )
@@ -142,6 +146,16 @@ class FrameAnalysis:
 
     lane_violation_transitions: tuple[
         LaneViolationTransition,
+        ...,
+    ] = ()
+
+    red_light_crossings: tuple[
+        RedLightCrossingObservation,
+        ...,
+    ] = ()
+
+    red_light_transitions: tuple[
+        RedLightViolationTransition,
         ...,
     ] = ()
 
