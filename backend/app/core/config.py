@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     lane_violation_confirmation_frames: int = 3
     lane_violation_maximum_missed_frames: int = 2
 
+    traffic_light_minimum_saturation: int = 80
+    traffic_light_minimum_value: int = 100
+    traffic_light_minimum_active_pixel_ratio: float = 0.01
+    traffic_light_dominance_ratio: float = 1.25
+    traffic_light_confirmation_frames: int = 3
+    traffic_light_maximum_unknown_frames: int = 2
+    traffic_light_confidence_alpha: float = 0.40
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

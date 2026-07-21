@@ -23,6 +23,12 @@ from app.reasoning.lane_occupancy import (
 from app.reasoning.lane_violation import (
     LaneViolationDetector,
 )
+from app.reasoning.traffic_light_state import (
+    TrafficLightStateClassifier,
+)
+from app.reasoning.traffic_light_temporal import (
+    TrafficLightTemporalStabilizer,
+)
 from app.reasoning.wrong_way import (
     WrongWayViolationDetector,
 )
@@ -123,6 +129,8 @@ class VideoPipelineFactory:
             no_helmet_detector=(self._create_no_helmet_detector()),
             wrong_way_detector=self._create_wrong_way_detector(),
             lane_violation_detector=(self._create_lane_violation_detector()),
+            traffic_light_classifier=(self._create_traffic_light_classifier()),
+            traffic_light_stabilizer=(self._create_traffic_light_stabilizer()),
             frame_stride=(self.settings.detector_frame_stride),
         )
 
@@ -241,6 +249,31 @@ class VideoPipelineFactory:
             occupancy_analyzer=occupancy_analyzer,
             confirmation_frames=(self.settings.lane_violation_confirmation_frames),
             maximum_missed_frames=(self.settings.lane_violation_maximum_missed_frames),
+        )
+
+    def _create_traffic_light_classifier(
+        self,
+    ) -> TrafficLightStateClassifier:
+        """Create the frame-level signal classifier."""
+
+        return TrafficLightStateClassifier(
+            minimum_saturation=(self.settings.traffic_light_minimum_saturation),
+            minimum_value=(self.settings.traffic_light_minimum_value),
+            minimum_active_pixel_ratio=(
+                self.settings.traffic_light_minimum_active_pixel_ratio
+            ),
+            dominance_ratio=(self.settings.traffic_light_dominance_ratio),
+        )
+
+    def _create_traffic_light_stabilizer(
+        self,
+    ) -> TrafficLightTemporalStabilizer:
+        """Create temporal signal-state stabilization."""
+
+        return TrafficLightTemporalStabilizer(
+            confirmation_frames=(self.settings.traffic_light_confirmation_frames),
+            maximum_unknown_frames=(self.settings.traffic_light_maximum_unknown_frames),
+            confidence_alpha=(self.settings.traffic_light_confidence_alpha),
         )
 
     def _create_wrong_way_detector(
