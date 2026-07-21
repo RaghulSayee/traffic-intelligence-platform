@@ -104,7 +104,7 @@ def test_artifact_contains_traffic_light_state(
 
     writer.finish(
         pipeline_summary={
-            "pipeline_version": "0.9.0",
+            "pipeline_version": "1.0.0",
         }
     )
 

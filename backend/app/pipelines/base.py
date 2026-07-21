@@ -187,6 +187,8 @@ class PipelineSummary:
         default_factory=dict,
     )
 
+    final_analysis: FrameAnalysis | None = None
+
 
 class VideoAnalysisPipeline(Protocol):
     """Interface implemented by video-analysis pipelines."""

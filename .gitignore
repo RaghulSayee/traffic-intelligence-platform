@@ -58,3 +58,4 @@ backend/traffic_test*.mp4
 backend/models/*.pt
 backend/models/*.onnx
 backend/models/*.engine
+/backend/storage/validation/

@@ -384,6 +384,21 @@ class VideoProcessingWorker:
 
             summary = pipeline.finish()
 
+            final_analysis = summary.final_analysis
+
+            if final_analysis is not None and (
+                final_analysis.triple_riding_transitions
+                or final_analysis.no_helmet_transitions
+                or final_analysis.wrong_way_transitions
+                or final_analysis.lane_violation_transitions
+                or final_analysis.red_light_transitions
+            ):
+                await self._persist_violation_transitions(
+                    job=job,
+                    video=video,
+                    analysis=final_analysis,
+                )
+
             artifact_summary = artifact_writer.finish(pipeline_summary=summary.metrics)
 
             await self._attach_violation_preview(
