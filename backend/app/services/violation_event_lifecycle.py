@@ -22,6 +22,11 @@ from app.reasoning.triple_riding import (
     TripleRidingTransitionType,
     TripleRidingViolationSnapshot,
 )
+from app.reasoning.wrong_way import (
+    WrongWayTransition,
+    WrongWayTransitionType,
+    WrongWayViolationSnapshot,
+)
 from app.repositories.violation_event import (
     ViolationEventRepository,
 )
@@ -299,6 +304,143 @@ class ViolationEventLifecycleService:
 
         return tuple(persisted_events)
 
+    async def persist_wrong_way_transitions(
+        self,
+        *,
+        processing_job_id: UUID,
+        video_id: UUID,
+        camera_id: UUID | None,
+        video_created_at: datetime,
+        transitions: tuple[
+            WrongWayTransition,
+            ...,
+        ],
+        states: tuple[
+            WrongWayViolationSnapshot,
+            ...,
+        ],
+        tracks: tuple[TrackedObject, ...],
+    ) -> tuple[ViolationEvent, ...]:
+        """Create or update durable wrong-way events."""
+
+        if not transitions:
+            return ()
+
+        states_by_key = {
+            (
+                state.track_id,
+                state.lane_id,
+            ): state
+            for state in states
+        }
+
+        tracks_by_id = {track.track_id: track for track in tracks}
+
+        persisted_events: list[ViolationEvent] = []
+
+        for transition in transitions:
+            event_key = self.build_wrong_way_event_key(
+                processing_job_id=(processing_job_id),
+                transition=transition,
+            )
+
+            event = await self.repository.get_by_event_key(
+                event_key,
+                for_update=True,
+            )
+
+            state = states_by_key.get(
+                (
+                    transition.track_id,
+                    transition.lane_id,
+                )
+            )
+
+            track = tracks_by_id.get(transition.track_id)
+
+            detection_confidence = track.confidence if track is not None else None
+
+            rule_confidence = float(
+                min(
+                    max(
+                        (
+                            state.opposition_score
+                            if state is not None
+                            else transition.opposition_score
+                        ),
+                        0.0,
+                    ),
+                    1.0,
+                )
+            )
+
+            geometry = self._build_wrong_way_geometry(
+                transition=transition,
+                tracks_by_id=tracks_by_id,
+            )
+
+            existing_metadata = event.event_metadata if event is not None else {}
+
+            event_metadata = self._merge_wrong_way_metadata(
+                existing_metadata=(existing_metadata),
+                transition=transition,
+            )
+
+            if event is None:
+                occurred_at = self._calculate_wrong_way_occurred_at(
+                    video_created_at=(video_created_at),
+                    transition=transition,
+                )
+
+                event = ViolationEvent(
+                    video_id=video_id,
+                    camera_id=camera_id,
+                    processing_job_id=(processing_job_id),
+                    event_key=event_key,
+                    violation_type=(ViolationType.WRONG_WAY),
+                    review_status=(ReviewStatus.PENDING),
+                    occurred_at=occurred_at,
+                    frame_number=(
+                        transition.confirmed_frame or transition.frame_number
+                    ),
+                    track_id=str(transition.track_id),
+                    license_plate=None,
+                    detection_confidence=(detection_confidence),
+                    rule_confidence=(rule_confidence),
+                    ocr_confidence=None,
+                    evidence_image_key=None,
+                    evidence_clip_key=None,
+                    geometry=geometry,
+                    event_metadata=(event_metadata),
+                )
+
+                await self.repository.create(event)
+
+            else:
+                event.camera_id = event.camera_id or camera_id
+
+                event.event_metadata = event_metadata
+
+                if geometry:
+                    event.geometry = geometry
+
+                if detection_confidence is not None:
+                    event.detection_confidence = max(
+                        (event.detection_confidence or 0.0),
+                        detection_confidence,
+                    )
+
+                event.rule_confidence = max(
+                    event.rule_confidence or 0.0,
+                    rule_confidence,
+                )
+
+            persisted_events.append(event)
+
+        await self.repository.commit()
+
+        return tuple(persisted_events)
+
     async def attach_preview_to_job_events(
         self,
         *,
@@ -330,6 +472,23 @@ class ViolationEventLifecycleService:
         return changed_count
 
     @staticmethod
+    def build_wrong_way_event_key(
+        *,
+        processing_job_id: UUID,
+        transition: WrongWayTransition,
+    ) -> str:
+        """Build a stable wrong-way event key."""
+
+        anchor_frame = transition.confirmed_frame or transition.first_candidate_frame
+
+        return (
+            f"wrong_way:{processing_job_id}:"
+            f"{transition.track_id}:"
+            f"{transition.lane_id}:"
+            f"{anchor_frame}"
+        )
+
+    @staticmethod
     def build_triple_riding_event_key(
         *,
         processing_job_id: UUID,
@@ -359,6 +518,140 @@ class ViolationEventLifecycleService:
         return (
             f"no_helmet:{processing_job_id}:{transition.person_track_id}:{anchor_frame}"
         )
+
+    @classmethod
+    def _merge_wrong_way_metadata(
+        cls,
+        *,
+        existing_metadata: dict[str, Any],
+        transition: WrongWayTransition,
+    ) -> dict[str, Any]:
+        """Merge a wrong-way lifecycle transition."""
+
+        metadata = dict(existing_metadata or {})
+
+        history = [
+            dict(entry)
+            for entry in metadata.get(
+                "transition_history",
+                [],
+            )
+            if isinstance(entry, dict)
+        ]
+
+        transition_entry = {
+            "type": (transition.transition_type.value),
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "track_id": (transition.track_id),
+            "class_name": (transition.class_name),
+            "lane_id": (transition.lane_id),
+            "velocity": {
+                "x": transition.velocity_x,
+                "y": transition.velocity_y,
+            },
+            "speed_pixels_per_second": (transition.speed_pixels_per_second),
+            "cosine_similarity": (transition.cosine_similarity),
+            "opposition_score": (transition.opposition_score),
+        }
+
+        transition_identity = (
+            transition_entry["type"],
+            transition_entry["frame_number"],
+        )
+
+        already_recorded = any(
+            (
+                entry.get("type"),
+                entry.get("frame_number"),
+            )
+            == transition_identity
+            for entry in history
+        )
+
+        if not already_recorded:
+            history.append(transition_entry)
+
+        start_timestamp_seconds = max(
+            transition.timestamp_seconds - transition.duration_seconds,
+            0.0,
+        )
+
+        previous_peak = float(
+            metadata.get(
+                "peak_opposition_score",
+                0.0,
+            )
+        )
+
+        previous_minimum_cosine = float(
+            metadata.get(
+                "minimum_cosine_similarity",
+                1.0,
+            )
+        )
+
+        metadata.update(
+            {
+                "schema_version": "1.0",
+                "track_id": (transition.track_id),
+                "class_name": (transition.class_name),
+                "lane_id": (transition.lane_id),
+                "velocity": {
+                    "x": (transition.velocity_x),
+                    "y": (transition.velocity_y),
+                },
+                "speed_pixels_per_second": (transition.speed_pixels_per_second),
+                "cosine_similarity": (transition.cosine_similarity),
+                "opposition_score": (transition.opposition_score),
+                "peak_opposition_score": max(
+                    previous_peak,
+                    transition.opposition_score,
+                ),
+                "minimum_cosine_similarity": min(
+                    previous_minimum_cosine,
+                    transition.cosine_similarity,
+                ),
+                "first_candidate_frame": (transition.first_candidate_frame),
+                "confirmed_frame": (transition.confirmed_frame),
+                "start_timestamp_seconds": (
+                    metadata.get(
+                        "start_timestamp_seconds",
+                        start_timestamp_seconds,
+                    )
+                ),
+                "last_transition_type": (transition.transition_type.value),
+                "last_transition_frame": (transition.frame_number),
+                "last_timestamp_seconds": (transition.timestamp_seconds),
+                "transition_history": history,
+            }
+        )
+
+        if transition.transition_type == WrongWayTransitionType.STARTED:
+            if metadata.get("lifecycle_status") != "ended":
+                metadata["lifecycle_status"] = "active"
+
+            metadata.setdefault(
+                "start_frame",
+                transition.frame_number,
+            )
+
+            metadata.setdefault(
+                "duration_seconds",
+                0.0,
+            )
+
+        elif transition.transition_type == WrongWayTransitionType.ENDED:
+            metadata.update(
+                {
+                    "lifecycle_status": ("ended"),
+                    "end_frame": (transition.frame_number),
+                    "end_timestamp_seconds": (transition.timestamp_seconds),
+                    "duration_seconds": (transition.duration_seconds),
+                }
+            )
+
+        return metadata
 
     @classmethod
     def _merge_metadata(
@@ -565,6 +858,38 @@ class ViolationEventLifecycleService:
         return metadata
 
     @classmethod
+    def _build_wrong_way_geometry(
+        cls,
+        *,
+        transition: WrongWayTransition,
+        tracks_by_id: dict[
+            int,
+            TrackedObject,
+        ],
+    ) -> dict[str, Any]:
+        """Capture wrong-way track and motion geometry."""
+
+        track = tracks_by_id.get(transition.track_id)
+
+        geometry: dict[str, Any] = {
+            "track_id": (transition.track_id),
+            "class_name": (transition.class_name),
+            "lane_id": (transition.lane_id),
+            "velocity": {
+                "x_pixels_per_second": (transition.velocity_x),
+                "y_pixels_per_second": (transition.velocity_y),
+            },
+            "speed_pixels_per_second": (transition.speed_pixels_per_second),
+            "cosine_similarity": (transition.cosine_similarity),
+            "opposition_score": (transition.opposition_score),
+        }
+
+        if track is not None:
+            geometry["vehicle"] = cls._serialize_track_geometry(track)
+
+        return geometry
+
+    @classmethod
     def _build_no_helmet_geometry(
         cls,
         *,
@@ -592,6 +917,26 @@ class ViolationEventLifecycleService:
             geometry["motorcycle"] = cls._serialize_track_geometry(motorcycle)
 
         return geometry
+
+    @staticmethod
+    def _calculate_wrong_way_occurred_at(
+        *,
+        video_created_at: datetime,
+        transition: WrongWayTransition,
+    ) -> datetime:
+        """Convert a wrong-way video timestamp to UTC."""
+
+        base_time = video_created_at
+
+        if base_time.tzinfo is None:
+            base_time = base_time.replace(tzinfo=timezone.utc)
+
+        start_seconds = max(
+            transition.timestamp_seconds - transition.duration_seconds,
+            0.0,
+        )
+
+        return base_time + timedelta(seconds=start_seconds)
 
     @staticmethod
     def _calculate_occurred_at(

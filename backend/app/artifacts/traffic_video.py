@@ -28,6 +28,10 @@ from app.reasoning.triple_riding import (
     TripleRidingTransition,
     TripleRidingViolationSnapshot,
 )
+from app.reasoning.wrong_way import (
+    WrongWayTransition,
+    WrongWayViolationSnapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -146,7 +150,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.3",
+            "schema_version": "1.4",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -173,6 +177,18 @@ class TrafficVideoArtifactWriter:
                     "transitions": [
                         self._serialize_no_helmet_transition(transition)
                         for transition in analysis.no_helmet_transitions
+                    ],
+                },
+            },
+            "road_rules": {
+                "wrong_way": {
+                    "states": [
+                        self._serialize_wrong_way_state(state)
+                        for state in analysis.wrong_way_states
+                    ],
+                    "transitions": [
+                        self._serialize_wrong_way_transition(transition)
+                        for transition in analysis.wrong_way_transitions
                     ],
                 },
             },
@@ -309,24 +325,47 @@ class TrafficVideoArtifactWriter:
         packet: FramePacket,
         analysis: FrameAnalysis,
     ) -> None:
-        if not analysis.detections:
+        """Write detection or violation evidence."""
+
+        if (
+            self.max_evidence_frames <= 0
+            or len(self.evidence_keys) >= self.max_evidence_frames
+        ):
             return
 
-        if len(self.evidence_keys) >= self.max_evidence_frames:
-            return
-
-        maximum_confidence = max(
-            detection.confidence for detection in analysis.detections
+        transition_groups = (
+            analysis.triple_riding_transitions,
+            analysis.no_helmet_transitions,
+            analysis.wrong_way_transitions,
         )
 
-        if maximum_confidence < self.evidence_min_confidence:
-            return
+        has_started_violation = any(
+            getattr(
+                transition.transition_type,
+                "value",
+                str(transition.transition_type),
+            )
+            == "started"
+            for transitions in transition_groups
+            for transition in transitions
+        )
 
-        if self.last_evidence_frame is not None:
-            frames_since_previous = packet.frame_number - self.last_evidence_frame
-
-            if frames_since_previous < self.evidence_cooldown_frames:
+        if not has_started_violation:
+            if not analysis.detections:
                 return
+
+            maximum_confidence = max(
+                detection.confidence for detection in analysis.detections
+            )
+
+            if maximum_confidence < self.evidence_min_confidence:
+                return
+
+            if self.last_evidence_frame is not None:
+                frames_since_previous = packet.frame_number - self.last_evidence_frame
+
+                if frames_since_previous < self.evidence_cooldown_frames:
+                    return
 
         filename = f"frame-{packet.frame_number:06d}.jpg"
 
@@ -343,6 +382,7 @@ class TrafficVideoArtifactWriter:
         key = f"{self.root_key}/evidence/{filename}"
 
         self.evidence_keys.append(key)
+
         self.last_evidence_frame = packet.frame_number
 
     def _close_resources(self) -> None:
@@ -535,6 +575,57 @@ class TrafficVideoArtifactWriter:
             "rider_track_ids": list(transition.rider_track_ids),
             "rider_count": (transition.rider_count),
             "peak_rider_count": (transition.peak_rider_count),
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "first_candidate_frame": (transition.first_candidate_frame),
+            "confirmed_frame": (transition.confirmed_frame),
+            "duration_seconds": (transition.duration_seconds),
+        }
+
+    @staticmethod
+    def _serialize_wrong_way_state(
+        state: WrongWayViolationSnapshot,
+    ) -> dict[str, Any]:
+        """Serialize one wrong-way state."""
+
+        return {
+            "track_id": state.track_id,
+            "class_name": state.class_name,
+            "lane_id": state.lane_id,
+            "velocity": {
+                "x": state.velocity_x,
+                "y": state.velocity_y,
+            },
+            "speed_pixels_per_second": (state.speed_pixels_per_second),
+            "cosine_similarity": (state.cosine_similarity),
+            "opposition_score": (state.opposition_score),
+            "first_candidate_frame": (state.first_candidate_frame),
+            "confirmed_frame": (state.confirmed_frame),
+            "last_violation_frame": (state.last_violation_frame),
+            "consecutive_violation_frames": (state.consecutive_violation_frames),
+            "missed_frames": state.missed_frames,
+            "confirmed": state.confirmed,
+            "observed_this_frame": (state.observed_this_frame),
+        }
+
+    @staticmethod
+    def _serialize_wrong_way_transition(
+        transition: WrongWayTransition,
+    ) -> dict[str, Any]:
+        """Serialize one wrong-way lifecycle transition."""
+
+        return {
+            "type": transition.transition_type.value,
+            "track_id": transition.track_id,
+            "class_name": transition.class_name,
+            "lane_id": transition.lane_id,
+            "velocity": {
+                "x": transition.velocity_x,
+                "y": transition.velocity_y,
+            },
+            "speed_pixels_per_second": (transition.speed_pixels_per_second),
+            "cosine_similarity": (transition.cosine_similarity),
+            "opposition_score": (transition.opposition_score),
             "frame_number": (transition.frame_number),
             "timestamp_seconds": (transition.timestamp_seconds),
             "first_candidate_frame": (transition.first_candidate_frame),

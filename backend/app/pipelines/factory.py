@@ -17,6 +17,9 @@ from app.pipelines.baseline import (
 from app.pipelines.yolo_traffic import (
     YoloTrafficPipeline,
 )
+from app.reasoning.wrong_way import (
+    WrongWayViolationDetector,
+)
 from app.tracking.multi_object import (
     MultiObjectTracker,
 )
@@ -112,6 +115,7 @@ class VideoPipelineFactory:
             helmet_rider_associator=(self._create_helmet_rider_associator()),
             triple_riding_detector=(self._create_triple_riding_detector()),
             no_helmet_detector=(self._create_no_helmet_detector()),
+            wrong_way_detector=self._create_wrong_way_detector(),
             frame_stride=(self.settings.detector_frame_stride),
         )
 
@@ -210,4 +214,20 @@ class VideoPipelineFactory:
             minimum_riders=(self.settings.triple_riding_minimum_riders),
             confirmation_frames=(self.settings.triple_riding_confirmation_frames),
             maximum_missed_frames=(self.settings.triple_riding_maximum_missed_frames),
+        )
+
+    def _create_wrong_way_detector(
+        self,
+    ) -> WrongWayViolationDetector:
+        """Create lane-direction violation reasoning."""
+
+        return WrongWayViolationDetector(
+            minimum_speed_pixels_per_second=(
+                self.settings.wrong_way_minimum_speed_pixels_per_second
+            ),
+            opposite_cosine_threshold=(
+                self.settings.wrong_way_opposite_cosine_threshold
+            ),
+            confirmation_frames=(self.settings.wrong_way_confirmation_frames),
+            maximum_missed_frames=(self.settings.wrong_way_maximum_missed_frames),
         )
