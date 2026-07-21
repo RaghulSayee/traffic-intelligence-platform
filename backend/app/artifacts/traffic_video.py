@@ -35,6 +35,10 @@ from app.reasoning.triple_riding import (
     TripleRidingTransition,
     TripleRidingViolationSnapshot,
 )
+from app.reasoning.red_light import (
+    RedLightCrossingObservation,
+    RedLightViolationTransition,
+)
 from app.reasoning.traffic_light_state import (
     TrafficLightObservation,
 )
@@ -164,7 +168,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.6",
+            "schema_version": "1.7",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -193,6 +197,16 @@ class TrafficVideoArtifactWriter:
                         for transition in analysis.no_helmet_transitions
                     ],
                 },
+            },
+            "red_light_analysis": {
+                "crossings": [
+                    self._serialize_red_light_crossing(crossing)
+                    for crossing in analysis.red_light_crossings
+                ],
+                "transitions": [
+                    self._serialize_red_light_transition(transition)
+                    for transition in analysis.red_light_transitions
+                ],
             },
             "traffic_lights": {
                 "observations": [
@@ -382,6 +396,7 @@ class TrafficVideoArtifactWriter:
             analysis.no_helmet_transitions,
             analysis.wrong_way_transitions,
             analysis.lane_violation_transitions,
+            analysis.red_light_transitions,
         )
 
         has_started_violation = any(
@@ -625,6 +640,88 @@ class TrafficVideoArtifactWriter:
             "first_candidate_frame": (transition.first_candidate_frame),
             "confirmed_frame": (transition.confirmed_frame),
             "duration_seconds": (transition.duration_seconds),
+        }
+
+    @staticmethod
+    def _serialize_red_light_crossing(
+        crossing: RedLightCrossingObservation,
+    ) -> dict[str, Any]:
+        """Serialize one stop-line crossing."""
+
+        return {
+            "track_id": crossing.track_id,
+            "class_name": crossing.class_name,
+            "stop_line_id": crossing.stop_line_id,
+            "lane_id": crossing.lane_id,
+            "traffic_light_region_id": (crossing.traffic_light_region_id),
+            "signal_state": (crossing.signal_state.value),
+            "signal_confidence": (crossing.signal_confidence),
+            "previous_frame_number": (crossing.previous_frame_number),
+            "frame_number": crossing.frame_number,
+            "timestamp_seconds": (crossing.timestamp_seconds),
+            "previous_anchor": {
+                "x": (crossing.previous_anchor_x_normalized),
+                "y": (crossing.previous_anchor_y_normalized),
+            },
+            "anchor": {
+                "x": crossing.anchor_x_normalized,
+                "y": crossing.anchor_y_normalized,
+            },
+            "previous_signed_distance_pixels": (
+                crossing.previous_signed_distance_pixels
+            ),
+            "signed_distance_pixels": (crossing.signed_distance_pixels),
+            "crossing_depth_pixels": (crossing.crossing_depth_pixels),
+            "velocity": {
+                "x": crossing.velocity_x,
+                "y": crossing.velocity_y,
+                "speed_pixels_per_second": (crossing.speed_pixels_per_second),
+            },
+            "direction_cosine": (crossing.direction_cosine),
+            "detection_confidence": (crossing.detection_confidence),
+            "rule_confidence": (crossing.rule_confidence),
+            "is_violation": crossing.is_violation,
+        }
+
+    @staticmethod
+    def _serialize_red_light_transition(
+        transition: RedLightViolationTransition,
+    ) -> dict[str, Any]:
+        """Serialize one red-light violation transition."""
+
+        return {
+            "transition_type": (transition.transition_type.value),
+            "track_id": transition.track_id,
+            "class_name": transition.class_name,
+            "stop_line_id": (transition.stop_line_id),
+            "lane_id": transition.lane_id,
+            "traffic_light_region_id": (transition.traffic_light_region_id),
+            "signal_state": (transition.signal_state.value),
+            "signal_confidence": (transition.signal_confidence),
+            "previous_frame_number": (transition.previous_frame_number),
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "previous_anchor": {
+                "x": (transition.previous_anchor_x_normalized),
+                "y": (transition.previous_anchor_y_normalized),
+            },
+            "anchor": {
+                "x": (transition.anchor_x_normalized),
+                "y": (transition.anchor_y_normalized),
+            },
+            "previous_signed_distance_pixels": (
+                transition.previous_signed_distance_pixels
+            ),
+            "signed_distance_pixels": (transition.signed_distance_pixels),
+            "crossing_depth_pixels": (transition.crossing_depth_pixels),
+            "velocity": {
+                "x": transition.velocity_x,
+                "y": transition.velocity_y,
+                "speed_pixels_per_second": (transition.speed_pixels_per_second),
+            },
+            "direction_cosine": (transition.direction_cosine),
+            "detection_confidence": (transition.detection_confidence),
+            "rule_confidence": (transition.rule_confidence),
         }
 
     @staticmethod

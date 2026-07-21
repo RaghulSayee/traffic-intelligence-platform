@@ -104,7 +104,7 @@ def test_artifact_contains_traffic_light_state(
 
     writer.finish(
         pipeline_summary={
-            "pipeline_version": "0.8.0",
+            "pipeline_version": "0.9.0",
         }
     )
 
@@ -112,7 +112,7 @@ def test_artifact_contains_traffic_light_state(
 
     record = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
 
-    assert record["schema_version"] == "1.6"
+    assert record["schema_version"] == "1.7"
 
     traffic_lights = record["traffic_lights"]
 

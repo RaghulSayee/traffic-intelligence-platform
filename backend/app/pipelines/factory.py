@@ -23,6 +23,9 @@ from app.reasoning.lane_occupancy import (
 from app.reasoning.lane_violation import (
     LaneViolationDetector,
 )
+from app.reasoning.red_light import (
+    RedLightCrossingDetector,
+)
 from app.reasoning.traffic_light_state import (
     TrafficLightStateClassifier,
 )
@@ -129,6 +132,7 @@ class VideoPipelineFactory:
             no_helmet_detector=(self._create_no_helmet_detector()),
             wrong_way_detector=self._create_wrong_way_detector(),
             lane_violation_detector=(self._create_lane_violation_detector()),
+            red_light_detector=(self._create_red_light_detector()),
             traffic_light_classifier=(self._create_traffic_light_classifier()),
             traffic_light_stabilizer=(self._create_traffic_light_stabilizer()),
             frame_stride=(self.settings.detector_frame_stride),
@@ -249,6 +253,25 @@ class VideoPipelineFactory:
             occupancy_analyzer=occupancy_analyzer,
             confirmation_frames=(self.settings.lane_violation_confirmation_frames),
             maximum_missed_frames=(self.settings.lane_violation_maximum_missed_frames),
+        )
+
+    def _create_red_light_detector(
+        self,
+    ) -> RedLightCrossingDetector:
+        """Create red-light stop-line crossing detection."""
+
+        return RedLightCrossingDetector(
+            minimum_speed_pixels_per_second=(
+                self.settings.red_light_minimum_speed_pixels_per_second
+            ),
+            minimum_direction_cosine=(self.settings.red_light_minimum_direction_cosine),
+            line_crossing_tolerance_pixels=(
+                self.settings.red_light_line_crossing_tolerance_pixels
+            ),
+            minimum_signal_confidence=(
+                self.settings.red_light_minimum_signal_confidence
+            ),
+            maximum_missed_frames=(self.settings.red_light_maximum_missed_frames),
         )
 
     def _create_traffic_light_classifier(

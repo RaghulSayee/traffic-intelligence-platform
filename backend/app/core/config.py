@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     traffic_light_maximum_unknown_frames: int = 2
     traffic_light_confidence_alpha: float = 0.40
 
+    red_light_minimum_speed_pixels_per_second: float = 10.0
+    red_light_minimum_direction_cosine: float = 0.25
+    red_light_line_crossing_tolerance_pixels: float = 3.0
+    red_light_minimum_signal_confidence: float = 0.60
+    red_light_maximum_missed_frames: int = 2
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

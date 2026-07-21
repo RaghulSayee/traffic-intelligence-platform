@@ -33,6 +33,12 @@ from app.reasoning.lane_violation import (
 from app.reasoning.lane_violation_annotation import (
     annotate_lane_violations,
 )
+from app.reasoning.red_light import (
+    RedLightCrossingDetector,
+)
+from app.reasoning.red_light_annotation import (
+    annotate_red_light_crossings,
+)
 from app.reasoning.traffic_light_annotation import (
     annotate_traffic_light_states,
 )
@@ -61,7 +67,7 @@ class YoloTrafficPipeline:
     """Detect, track, and reason about traffic objects."""
 
     name = "yolo-traffic-pipeline"
-    version = "0.8.0"
+    version = "0.9.0"
 
     def __init__(
         self,
@@ -76,6 +82,7 @@ class YoloTrafficPipeline:
         no_helmet_detector: NoHelmetViolationDetector,
         wrong_way_detector: WrongWayViolationDetector,
         lane_violation_detector: LaneViolationDetector,
+        red_light_detector: RedLightCrossingDetector,
         traffic_light_classifier: TrafficLightStateClassifier,
         traffic_light_stabilizer: TrafficLightTemporalStabilizer,
         frame_stride: int,
@@ -100,6 +107,8 @@ class YoloTrafficPipeline:
         self.wrong_way_detector = wrong_way_detector
 
         self.lane_violation_detector = lane_violation_detector
+
+        self.red_light_detector = red_light_detector
 
         self.traffic_light_classifier = traffic_light_classifier
 
@@ -179,6 +188,12 @@ class YoloTrafficPipeline:
             str,
         ] = {}
 
+        self.total_red_light_crossings = 0
+        self.red_light_violation_count = 0
+
+        self.red_light_track_ids: set[int] = set()
+        self.red_light_stop_line_ids: set[str] = set()
+
     def start(
         self,
         context: VideoContext,
@@ -195,6 +210,7 @@ class YoloTrafficPipeline:
         self.wrong_way_detector.reset()
         self.lane_violation_detector.reset()
         self.traffic_light_stabilizer.reset()
+        self.red_light_detector.reset()
 
         self.frames_seen = 0
         self.frames_analyzed = 0
@@ -240,6 +256,12 @@ class YoloTrafficPipeline:
 
         self.maximum_stable_red_traffic_lights = 0
         self.final_traffic_light_states = {}
+
+        self.total_red_light_crossings = 0
+        self.red_light_violation_count = 0
+
+        self.red_light_track_ids = set()
+        self.red_light_stop_line_ids = set()
 
     def process_frame(
         self,
@@ -298,6 +320,16 @@ class YoloTrafficPipeline:
             frame_number=packet.frame_number,
             timestamp_seconds=(packet.timestamp_seconds),
             observations=(traffic_light_raw_result),
+        )
+
+        red_light_result = self.red_light_detector.update(
+            frame_number=packet.frame_number,
+            timestamp_seconds=(packet.timestamp_seconds),
+            tracks=tracking_result.tracks,
+            traffic_light_states=(traffic_light_result.states),
+            scene=self.scene_configuration,
+            image_width=image_width,
+            image_height=image_height,
         )
 
         wrong_way_result = self.wrong_way_detector.update(
@@ -384,6 +416,15 @@ class YoloTrafficPipeline:
             self.maximum_active_lane_violations,
             len(lane_violation_result.active_violations),
         )
+
+        self.total_red_light_crossings += len(red_light_result.observations)
+
+        self.red_light_violation_count += len(red_light_result.transitions)
+
+        for transition in red_light_result.transitions:
+            self.red_light_track_ids.add(transition.track_id)
+
+            self.red_light_stop_line_ids.add(transition.stop_line_id)
 
         self.total_traffic_light_observations += len(
             traffic_light_raw_result.observations
@@ -483,8 +524,14 @@ class YoloTrafficPipeline:
             states=traffic_light_result.states,
         )
 
-        track_annotated_frame = annotate_tracks(
+        red_light_annotated_frame = annotate_red_light_crossings(
             signal_annotated_frame,
+            scene=self.scene_configuration,
+            crossings=(red_light_result.observations),
+        )
+
+        track_annotated_frame = annotate_tracks(
+            red_light_annotated_frame,
             tracking_result.tracks,
         )
 
@@ -525,6 +572,8 @@ class YoloTrafficPipeline:
             lane_occupancy_observations=(lane_violation_result.occupancy.observations),
             lane_violation_states=(lane_violation_result.states),
             lane_violation_transitions=(lane_violation_result.transitions),
+            red_light_crossings=(red_light_result.observations),
+            red_light_transitions=(red_light_result.transitions),
             traffic_light_observations=(traffic_light_raw_result.observations),
             traffic_light_states=(traffic_light_result.states),
             traffic_light_transitions=(traffic_light_result.transitions),
@@ -580,6 +629,15 @@ class YoloTrafficPipeline:
                     state.track_id
                     for state in lane_violation_result.states
                     if state.confirmed
+                ],
+                "red_light_crossing_count": len(red_light_result.observations),
+                "red_light_violation_count": len(red_light_result.transitions),
+                "red_light_track_ids": [
+                    transition.track_id for transition in red_light_result.transitions
+                ],
+                "red_light_stop_line_ids": [
+                    transition.stop_line_id
+                    for transition in red_light_result.transitions
                 ],
                 "traffic_light_region_count": len(
                     traffic_light_raw_result.observations
@@ -703,6 +761,10 @@ class YoloTrafficPipeline:
                 "lane_violation_track_ids": sorted(
                     self.unique_lane_violation_track_ids
                 ),
+                "total_red_light_crossings": (self.total_red_light_crossings),
+                "red_light_violation_count": (self.red_light_violation_count),
+                "red_light_track_ids": sorted(self.red_light_track_ids),
+                "red_light_stop_line_ids": sorted(self.red_light_stop_line_ids),
                 "total_traffic_light_observations": (
                     self.total_traffic_light_observations
                 ),
