@@ -7,6 +7,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
+    from app.reasoning.traffic_light_state import (
+        TrafficLightObservation,
+    )
+    from app.reasoning.traffic_light_temporal import (
+        StableTrafficLightSnapshot,
+        TrafficLightStateTransition,
+    )
     from app.detection.types import Detection
     from app.schemas.camera_scene import (
         CameraSceneConfiguration,
@@ -135,6 +142,21 @@ class FrameAnalysis:
 
     lane_violation_transitions: tuple[
         LaneViolationTransition,
+        ...,
+    ] = ()
+
+    traffic_light_observations: tuple[
+        TrafficLightObservation,
+        ...,
+    ] = ()
+
+    traffic_light_states: tuple[
+        StableTrafficLightSnapshot,
+        ...,
+    ] = ()
+
+    traffic_light_transitions: tuple[
+        TrafficLightStateTransition,
         ...,
     ] = ()
 

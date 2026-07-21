@@ -115,7 +115,7 @@ def test_artifact_contains_lane_analysis(
 
     writer.finish(
         pipeline_summary={
-            "pipeline_version": "0.7.0",
+            "pipeline_version": "0.8.0",
         }
     )
 
@@ -123,7 +123,7 @@ def test_artifact_contains_lane_analysis(
 
     record = json.loads(artifact_path.read_text(encoding="utf-8").splitlines()[0])
 
-    assert record["schema_version"] == "1.5"
+    assert record["schema_version"] == "1.6"
 
     lane_analysis = record["lane_analysis"]
 

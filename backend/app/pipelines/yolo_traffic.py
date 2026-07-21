@@ -33,6 +33,16 @@ from app.reasoning.lane_violation import (
 from app.reasoning.lane_violation_annotation import (
     annotate_lane_violations,
 )
+from app.reasoning.traffic_light_annotation import (
+    annotate_traffic_light_states,
+)
+from app.reasoning.traffic_light_state import (
+    TrafficLightState,
+    TrafficLightStateClassifier,
+)
+from app.reasoning.traffic_light_temporal import (
+    TrafficLightTemporalStabilizer,
+)
 from app.reasoning.wrong_way import (
     WrongWayTransitionType,
     WrongWayViolationDetector,
@@ -51,7 +61,7 @@ class YoloTrafficPipeline:
     """Detect, track, and reason about traffic objects."""
 
     name = "yolo-traffic-pipeline"
-    version = "0.7.0"
+    version = "0.8.0"
 
     def __init__(
         self,
@@ -66,6 +76,8 @@ class YoloTrafficPipeline:
         no_helmet_detector: NoHelmetViolationDetector,
         wrong_way_detector: WrongWayViolationDetector,
         lane_violation_detector: LaneViolationDetector,
+        traffic_light_classifier: TrafficLightStateClassifier,
+        traffic_light_stabilizer: TrafficLightTemporalStabilizer,
         frame_stride: int,
     ) -> None:
         if frame_stride <= 0:
@@ -88,6 +100,10 @@ class YoloTrafficPipeline:
         self.wrong_way_detector = wrong_way_detector
 
         self.lane_violation_detector = lane_violation_detector
+
+        self.traffic_light_classifier = traffic_light_classifier
+
+        self.traffic_light_stabilizer = traffic_light_stabilizer
 
         self.frame_stride = frame_stride
 
@@ -142,6 +158,27 @@ class YoloTrafficPipeline:
 
         self.unique_lane_violation_track_ids: set[int] = set()
 
+        self.total_traffic_light_observations = 0
+
+        self.traffic_light_raw_state_counts: dict[
+            str,
+            int,
+        ] = {}
+
+        self.traffic_light_transition_count = 0
+
+        self.traffic_light_transition_counts: dict[
+            str,
+            int,
+        ] = {}
+
+        self.maximum_stable_red_traffic_lights = 0
+
+        self.final_traffic_light_states: dict[
+            str,
+            str,
+        ] = {}
+
     def start(
         self,
         context: VideoContext,
@@ -157,6 +194,7 @@ class YoloTrafficPipeline:
         self.no_helmet_detector.reset()
         self.wrong_way_detector.reset()
         self.lane_violation_detector.reset()
+        self.traffic_light_stabilizer.reset()
 
         self.frames_seen = 0
         self.frames_analyzed = 0
@@ -193,6 +231,15 @@ class YoloTrafficPipeline:
         self.unique_no_helmet_person_ids = set()
         self.unique_wrong_way_track_ids = set()
         self.unique_lane_violation_track_ids = set()
+
+        self.total_traffic_light_observations = 0
+        self.traffic_light_raw_state_counts = {}
+
+        self.traffic_light_transition_count = 0
+        self.traffic_light_transition_counts = {}
+
+        self.maximum_stable_red_traffic_lights = 0
+        self.final_traffic_light_states = {}
 
     def process_frame(
         self,
@@ -242,6 +289,17 @@ class YoloTrafficPipeline:
 
         image_height, image_width = packet.image.shape[:2]
 
+        traffic_light_raw_result = self.traffic_light_classifier.classify(
+            frame=packet.image,
+            scene=self.scene_configuration,
+        )
+
+        traffic_light_result = self.traffic_light_stabilizer.update(
+            frame_number=packet.frame_number,
+            timestamp_seconds=(packet.timestamp_seconds),
+            observations=(traffic_light_raw_result),
+        )
+
         wrong_way_result = self.wrong_way_detector.update(
             frame_number=packet.frame_number,
             timestamp_seconds=(packet.timestamp_seconds),
@@ -271,6 +329,10 @@ class YoloTrafficPipeline:
         helmet_detection_class_counts = helmet_detection_result.count_by_class()
 
         confirmed_track_counts = tracking_result.count_by_class()
+
+        traffic_light_raw_state_counts = traffic_light_raw_result.count_by_state()
+
+        traffic_light_stable_state_counts = traffic_light_result.count_by_stable_state()
 
         self.frames_analyzed += 1
 
@@ -322,6 +384,43 @@ class YoloTrafficPipeline:
             self.maximum_active_lane_violations,
             len(lane_violation_result.active_violations),
         )
+
+        self.total_traffic_light_observations += len(
+            traffic_light_raw_result.observations
+        )
+
+        self._merge_class_counts(
+            destination=(self.traffic_light_raw_state_counts),
+            frame_counts=(traffic_light_raw_state_counts),
+        )
+
+        stable_red_count = traffic_light_stable_state_counts.get(
+            TrafficLightState.RED.value,
+            0,
+        )
+
+        self.maximum_stable_red_traffic_lights = max(
+            self.maximum_stable_red_traffic_lights,
+            stable_red_count,
+        )
+
+        for state in traffic_light_result.states:
+            self.final_traffic_light_states[state.region_id] = state.stable_state.value
+
+        for transition in traffic_light_result.transitions:
+            self.traffic_light_transition_count += 1
+
+            transition_key = (
+                f"{transition.previous_state.value}_to_{transition.current_state.value}"
+            )
+
+            self.traffic_light_transition_counts[transition_key] = (
+                self.traffic_light_transition_counts.get(
+                    transition_key,
+                    0,
+                )
+                + 1
+            )
 
         self._merge_class_counts(
             destination=(self.detection_class_counts),
@@ -378,8 +477,14 @@ class YoloTrafficPipeline:
             self.scene_configuration,
         )
 
-        track_annotated_frame = annotate_tracks(
+        signal_annotated_frame = annotate_traffic_light_states(
             scene_annotated_frame,
+            scene=self.scene_configuration,
+            states=traffic_light_result.states,
+        )
+
+        track_annotated_frame = annotate_tracks(
+            signal_annotated_frame,
             tracking_result.tracks,
         )
 
@@ -420,6 +525,9 @@ class YoloTrafficPipeline:
             lane_occupancy_observations=(lane_violation_result.occupancy.observations),
             lane_violation_states=(lane_violation_result.states),
             lane_violation_transitions=(lane_violation_result.transitions),
+            traffic_light_observations=(traffic_light_raw_result.observations),
+            traffic_light_states=(traffic_light_result.states),
+            traffic_light_transitions=(traffic_light_result.transitions),
             annotated_frame=annotated_frame,
             metrics={
                 "frame_number": (packet.frame_number),
@@ -473,6 +581,18 @@ class YoloTrafficPipeline:
                     for state in lane_violation_result.states
                     if state.confirmed
                 ],
+                "traffic_light_region_count": len(
+                    traffic_light_raw_result.observations
+                ),
+                "traffic_light_raw_state_counts": (traffic_light_raw_state_counts),
+                "traffic_light_stable_state_counts": (
+                    traffic_light_stable_state_counts
+                ),
+                "traffic_light_transition_count": len(traffic_light_result.transitions),
+                "traffic_light_states_by_region": {
+                    state.region_id: (state.stable_state.value)
+                    for state in traffic_light_result.states
+                },
                 "removed_track_ids": list(tracking_result.removed_track_ids),
                 "removed_rider_pairs": [
                     list(pair) for pair in temporal_associations.removed_pairs
@@ -583,6 +703,18 @@ class YoloTrafficPipeline:
                 "lane_violation_track_ids": sorted(
                     self.unique_lane_violation_track_ids
                 ),
+                "total_traffic_light_observations": (
+                    self.total_traffic_light_observations
+                ),
+                "traffic_light_raw_state_counts": (self.traffic_light_raw_state_counts),
+                "traffic_light_transition_count": (self.traffic_light_transition_count),
+                "traffic_light_transition_counts": (
+                    self.traffic_light_transition_counts
+                ),
+                "maximum_stable_red_traffic_lights": (
+                    self.maximum_stable_red_traffic_lights
+                ),
+                "final_traffic_light_states": (self.final_traffic_light_states),
             }
         )
 

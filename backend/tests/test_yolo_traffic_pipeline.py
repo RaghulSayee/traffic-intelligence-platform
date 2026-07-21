@@ -21,6 +21,12 @@ from app.reasoning.lane_occupancy import (
 from app.reasoning.lane_violation import (
     LaneViolationDetector,
 )
+from app.reasoning.traffic_light_state import (
+    TrafficLightStateClassifier,
+)
+from app.reasoning.traffic_light_temporal import (
+    TrafficLightTemporalStabilizer,
+)
 from app.reasoning.wrong_way import (
     WrongWayViolationDetector,
 )
@@ -354,6 +360,21 @@ def create_reasoning_pipeline(
                 ),
                 confirmation_frames=2,
                 maximum_missed_frames=1,
+            )
+        ),
+        traffic_light_classifier=(
+            TrafficLightStateClassifier(
+                minimum_saturation=80,
+                minimum_value=100,
+                minimum_active_pixel_ratio=0.01,
+                dominance_ratio=1.25,
+            )
+        ),
+        traffic_light_stabilizer=(
+            TrafficLightTemporalStabilizer(
+                confirmation_frames=2,
+                maximum_unknown_frames=1,
+                confidence_alpha=0.40,
             )
         ),
         frame_stride=frame_stride,

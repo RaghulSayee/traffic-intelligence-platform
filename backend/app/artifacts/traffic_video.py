@@ -35,6 +35,13 @@ from app.reasoning.triple_riding import (
     TripleRidingTransition,
     TripleRidingViolationSnapshot,
 )
+from app.reasoning.traffic_light_state import (
+    TrafficLightObservation,
+)
+from app.reasoning.traffic_light_temporal import (
+    StableTrafficLightSnapshot,
+    TrafficLightStateTransition,
+)
 from app.reasoning.wrong_way import (
     WrongWayTransition,
     WrongWayViolationSnapshot,
@@ -157,7 +164,7 @@ class TrafficVideoArtifactWriter:
         self.analyzed_frames += 1
 
         record = {
-            "schema_version": "1.5",
+            "schema_version": "1.6",
             "frame_number": packet.frame_number,
             "timestamp_seconds": (packet.timestamp_seconds),
             "image_width": int(packet.image.shape[1]),
@@ -186,6 +193,20 @@ class TrafficVideoArtifactWriter:
                         for transition in analysis.no_helmet_transitions
                     ],
                 },
+            },
+            "traffic_lights": {
+                "observations": [
+                    self._serialize_traffic_light_observation(observation)
+                    for observation in analysis.traffic_light_observations
+                ],
+                "states": [
+                    self._serialize_traffic_light_state(state)
+                    for state in analysis.traffic_light_states
+                ],
+                "transitions": [
+                    self._serialize_traffic_light_transition(transition)
+                    for transition in analysis.traffic_light_transitions
+                ],
             },
             "lane_analysis": {
                 "occupancy": [
@@ -604,6 +625,71 @@ class TrafficVideoArtifactWriter:
             "first_candidate_frame": (transition.first_candidate_frame),
             "confirmed_frame": (transition.confirmed_frame),
             "duration_seconds": (transition.duration_seconds),
+        }
+
+    @staticmethod
+    def _serialize_traffic_light_observation(
+        observation: TrafficLightObservation,
+    ) -> dict[str, Any]:
+        """Serialize one raw traffic-light observation."""
+
+        return {
+            "region_id": observation.region_id,
+            "region_name": observation.region_name,
+            "state": observation.state.value,
+            "confidence": observation.confidence,
+            "scores": {
+                "red": observation.red_score,
+                "yellow": observation.yellow_score,
+                "green": observation.green_score,
+            },
+            "active_pixel_ratio": (observation.active_pixel_ratio),
+            "polygon_pixel_count": (observation.polygon_pixel_count),
+            "active_pixel_count": (observation.active_pixel_count),
+        }
+
+    @staticmethod
+    def _serialize_traffic_light_state(
+        state: StableTrafficLightSnapshot,
+    ) -> dict[str, Any]:
+        """Serialize one stabilized signal state."""
+
+        return {
+            "region_id": state.region_id,
+            "region_name": state.region_name,
+            "raw_state": state.raw_state.value,
+            "raw_confidence": state.raw_confidence,
+            "stable_state": (state.stable_state.value),
+            "stable_confidence": (state.stable_confidence),
+            "candidate_state": (state.candidate_state.value),
+            "candidate_confidence": (state.candidate_confidence),
+            "consecutive_candidate_frames": (state.consecutive_candidate_frames),
+            "unknown_frames": (state.unknown_frames),
+            "scores": {
+                "red": state.red_score,
+                "yellow": state.yellow_score,
+                "green": state.green_score,
+            },
+            "active_pixel_ratio": (state.active_pixel_ratio),
+            "last_observed_frame": (state.last_observed_frame),
+            "observed_this_frame": (state.observed_this_frame),
+        }
+
+    @staticmethod
+    def _serialize_traffic_light_transition(
+        transition: TrafficLightStateTransition,
+    ) -> dict[str, Any]:
+        """Serialize one stabilized state transition."""
+
+        return {
+            "region_id": transition.region_id,
+            "region_name": transition.region_name,
+            "previous_state": (transition.previous_state.value),
+            "current_state": (transition.current_state.value),
+            "confidence": transition.confidence,
+            "frame_number": (transition.frame_number),
+            "timestamp_seconds": (transition.timestamp_seconds),
+            "confirmation_frames": (transition.confirmation_frames),
         }
 
     @staticmethod
