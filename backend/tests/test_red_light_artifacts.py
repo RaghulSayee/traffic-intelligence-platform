@@ -120,7 +120,7 @@ def test_artifact_contains_red_light_analysis(
 
     writer.finish(
         pipeline_summary={
-            "pipeline_version": "0.9.0",
+            "pipeline_version": "1.0.0",
         }
     )
 

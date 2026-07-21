@@ -427,7 +427,7 @@ def replace_latest_link(
 
 
 async def main() -> None:
-    assert YoloTrafficPipeline.version == "0.9.0"
+    assert YoloTrafficPipeline.version == "1.0.0"
 
     scene = create_scene()
 
@@ -576,7 +576,7 @@ async def main() -> None:
         artifact_summary = writer.finish(
             pipeline_summary={
                 "pipeline_name": ("yolo-traffic-pipeline"),
-                "pipeline_version": "0.9.0",
+                "pipeline_version": "1.0.0",
                 "artifact_schema_version": "1.7",
                 "validation_type": ("synthetic-red-light-violation"),
                 "processed_frames": len(ANCHOR_Y_POSITIONS),
@@ -649,7 +649,7 @@ async def main() -> None:
 
     summary = {
         "validation_status": "passed",
-        "pipeline_version": "0.9.0",
+        "pipeline_version": "1.0.0",
         "artifact_schema_version": "1.7",
         "job_id": str(job_id),
         "video_id": str(video_id),
@@ -692,7 +692,7 @@ async def main() -> None:
 
     print(
         "Pipeline version:",
-        "0.9.0",
+        "1.0.0",
     )
 
     print(

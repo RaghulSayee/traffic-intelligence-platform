@@ -387,7 +387,7 @@ def test_red_light_transition_forces_evidence_capture(
     artifact_summary = writer.finish(
         pipeline_summary={
             "pipeline_name": ("yolo-traffic-pipeline"),
-            "pipeline_version": "0.9.0",
+            "pipeline_version": "1.0.0",
         }
     )
 

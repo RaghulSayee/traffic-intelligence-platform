@@ -314,6 +314,40 @@ class LaneViolationDetector:
             transitions=tuple(transitions),
         )
 
+    def flush(
+        self,
+        *,
+        frame_number: int,
+        timestamp_seconds: float,
+    ) -> tuple[LaneViolationTransition, ...]:
+        """
+        End confirmed violations when video processing stops.
+
+        Unconfirmed candidates are discarded because they never
+        satisfied the temporal confirmation requirement.
+        """
+
+        if frame_number <= 0:
+            raise ValueError("Frame number must be positive.")
+
+        if timestamp_seconds < 0:
+            raise ValueError("Timestamp cannot be negative.")
+
+        transitions = tuple(
+            self._create_transition(
+                state=state,
+                transition_type=(LaneViolationTransitionType.ENDED),
+                frame_number=frame_number,
+                timestamp_seconds=timestamp_seconds,
+            )
+            for _, state in sorted(self._states.items())
+            if state.confirmed
+        )
+
+        self._states.clear()
+
+        return transitions
+
     def reset(self) -> None:
         """Clear state before processing another video."""
 

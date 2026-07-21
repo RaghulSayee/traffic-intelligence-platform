@@ -67,7 +67,7 @@ class YoloTrafficPipeline:
     """Detect, track, and reason about traffic objects."""
 
     name = "yolo-traffic-pipeline"
-    version = "0.9.0"
+    version = "1.0.0"
 
     def __init__(
         self,
@@ -120,6 +120,9 @@ class YoloTrafficPipeline:
 
         self.frames_seen = 0
         self.frames_analyzed = 0
+
+        self.last_frame_number = None
+        self.last_timestamp_seconds = None
 
         self.total_detections = 0
         self.total_inference_time_ms = 0.0
@@ -193,6 +196,9 @@ class YoloTrafficPipeline:
 
         self.red_light_track_ids: set[int] = set()
         self.red_light_stop_line_ids: set[str] = set()
+
+        self.last_frame_number: int | None = None
+        self.last_timestamp_seconds: float | None = None
 
     def start(
         self,
@@ -270,6 +276,9 @@ class YoloTrafficPipeline:
         """Analyze one sampled video frame."""
 
         self.frames_seen += 1
+
+        self.last_frame_number = packet.frame_number
+        self.last_timestamp_seconds = packet.timestamp_seconds
 
         should_analyze = (packet.frame_number - 1) % self.frame_stride == 0
 
@@ -659,7 +668,9 @@ class YoloTrafficPipeline:
         )
 
     def finish(self) -> PipelineSummary:
-        """Return video-level processing statistics."""
+        """Finalize active violations and return statistics."""
+
+        final_analysis = self._finalize_active_violations()
 
         average_inference_time_ms = 0.0
         average_helmet_inference_time_ms = 0.0
@@ -674,6 +685,37 @@ class YoloTrafficPipeline:
             )
 
         unique_track_counts = self._unique_track_counts()
+
+        finalized_triple_riding_count = (
+            len(final_analysis.triple_riding_transitions)
+            if final_analysis is not None
+            else 0
+        )
+
+        finalized_no_helmet_count = (
+            len(final_analysis.no_helmet_transitions)
+            if final_analysis is not None
+            else 0
+        )
+
+        finalized_wrong_way_count = (
+            len(final_analysis.wrong_way_transitions)
+            if final_analysis is not None
+            else 0
+        )
+
+        finalized_lane_violation_count = (
+            len(final_analysis.lane_violation_transitions)
+            if final_analysis is not None
+            else 0
+        )
+
+        finalized_violation_count = (
+            finalized_triple_riding_count
+            + finalized_no_helmet_count
+            + finalized_wrong_way_count
+            + finalized_lane_violation_count
+        )
 
         return PipelineSummary(
             metrics={
@@ -737,6 +779,11 @@ class YoloTrafficPipeline:
                 "maximum_active_no_helmet_violations": (
                     self.maximum_active_no_helmet_violations
                 ),
+                "finalized_violation_count": (finalized_violation_count),
+                "finalized_triple_riding_count": (finalized_triple_riding_count),
+                "finalized_no_helmet_count": (finalized_no_helmet_count),
+                "finalized_wrong_way_count": (finalized_wrong_way_count),
+                "finalized_lane_violation_count": (finalized_lane_violation_count),
                 "triple_riding_event_count": (self.triple_riding_event_count),
                 "unique_triple_riding_motorcycles": len(
                     self.unique_triple_riding_motorcycle_ids
@@ -777,7 +824,49 @@ class YoloTrafficPipeline:
                     self.maximum_stable_red_traffic_lights
                 ),
                 "final_traffic_light_states": (self.final_traffic_light_states),
-            }
+            },
+            final_analysis=final_analysis,
+        )
+
+    def _finalize_active_violations(
+        self,
+    ) -> FrameAnalysis | None:
+        """Flush confirmed lifecycle states at end-of-video."""
+
+        if self.last_frame_number is None or self.last_timestamp_seconds is None:
+            return None
+
+        keyword_arguments = {
+            "frame_number": self.last_frame_number,
+            "timestamp_seconds": (self.last_timestamp_seconds),
+        }
+
+        triple_riding_transitions = self.triple_riding_detector.flush(
+            **keyword_arguments
+        )
+
+        no_helmet_transitions = self.no_helmet_detector.flush(**keyword_arguments)
+
+        wrong_way_transitions = self.wrong_way_detector.flush(**keyword_arguments)
+
+        lane_violation_transitions = self.lane_violation_detector.flush(
+            **keyword_arguments
+        )
+
+        if not (
+            triple_riding_transitions
+            or no_helmet_transitions
+            or wrong_way_transitions
+            or lane_violation_transitions
+        ):
+            return None
+
+        return FrameAnalysis(
+            triple_riding_transitions=(triple_riding_transitions),
+            no_helmet_transitions=(no_helmet_transitions),
+            wrong_way_transitions=(wrong_way_transitions),
+            lane_violation_transitions=(lane_violation_transitions),
+            analyzed=False,
         )
 
     def _unique_track_counts(

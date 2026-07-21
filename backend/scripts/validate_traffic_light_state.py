@@ -396,9 +396,9 @@ def main() -> None:
 
     runtime_pipeline = VideoPipelineFactory(settings).create("yolo-traffic-pipeline")
 
-    assert YoloTrafficPipeline.version == "0.9.0"
+    assert YoloTrafficPipeline.version == "1.0.0"
 
-    assert runtime_pipeline.version == "0.9.0"
+    assert runtime_pipeline.version == "1.0.0"
 
     scene = create_scene()
 
