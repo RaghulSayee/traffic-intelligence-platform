@@ -71,7 +71,7 @@ services:
         value: "0.45"
 
       - key: RUN_VIDEO_WORKER
-        value: "true"
+        value: "false"
 
       - key: INITIAL_ADMIN_EMAIL
         sync: false
