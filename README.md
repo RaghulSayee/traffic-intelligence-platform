@@ -410,6 +410,3 @@ MS Computer Science student at Northeastern University with experience in backen
 - GitHub: https://github.com/RaghulSayee
 - Live project: https://traffic-intelligence-platform-lq7f.onrender.com
 
-## Repository Notice
-
-This project is intended for educational, research, demonstration, and portfolio use. Add a dedicated license file before distributing or reusing the code under a specific open-source license.
