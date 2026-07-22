@@ -46,3 +46,8 @@ class ReviewStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     REJECTED = "rejected"
+
+
+class UserRole(StrEnum):
+    ADMIN = "admin"
+    REVIEWER = "reviewer"

@@ -35,6 +35,15 @@ class VideoRead(BaseModel):
     updated_at: datetime
 
 
+class VideoListResponse(BaseModel):
+    """Paginated collection of uploaded videos."""
+
+    items: list[VideoRead]
+    total: int
+    offset: int
+    limit: int
+
+
 class VideoUploadResponse(BaseModel):
     """Response returned after accepting a video."""
 

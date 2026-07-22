@@ -37,3 +37,12 @@ class ProcessingJobRead(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+
+
+class ProcessingJobListResponse(BaseModel):
+    """Paginated collection of processing jobs."""
+
+    items: list[ProcessingJobRead]
+    total: int
+    offset: int
+    limit: int

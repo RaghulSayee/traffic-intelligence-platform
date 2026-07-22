@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TextIO
@@ -138,6 +139,8 @@ class TrafficVideoArtifactWriter:
         self.preview_filename = "annotated-preview.mp4"
 
         self.preview_path = self.temporary_directory / self.preview_filename
+
+        self.raw_preview_path = self.temporary_directory / "annotated-preview.raw.mp4"
 
         self.detections_file: TextIO = open(
             self.detections_path,
@@ -293,6 +296,8 @@ class TrafficVideoArtifactWriter:
 
         self._close_resources()
 
+        self._transcode_preview()
+
         preview_key: str | None = None
 
         if self.preview_enabled and self.preview_path.exists():
@@ -361,7 +366,7 @@ class TrafficVideoArtifactWriter:
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
             self.preview_writer = cv2.VideoWriter(
-                str(self.preview_path),
+                str(self.raw_preview_path),
                 fourcc,
                 self.preview_fps,
                 (width, height),
@@ -376,6 +381,82 @@ class TrafficVideoArtifactWriter:
                 )
 
         self.preview_writer.write(frame)
+
+    def _transcode_preview(
+        self,
+    ) -> None:
+        """Convert the OpenCV preview to browser-compatible H.264."""
+
+        if not self.raw_preview_path.exists():
+            return
+
+        ffmpeg_path = shutil.which("ffmpeg")
+
+        if ffmpeg_path is None:
+            os.replace(
+                self.raw_preview_path,
+                self.preview_path,
+            )
+            return
+
+        command = [
+            ffmpeg_path,
+            "-y",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-i",
+            str(self.raw_preview_path),
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(self.preview_path),
+        ]
+
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        except (
+            OSError,
+            subprocess.TimeoutExpired,
+        ):
+            self.preview_path.unlink(missing_ok=True)
+
+            os.replace(
+                self.raw_preview_path,
+                self.preview_path,
+            )
+            return
+
+        conversion_succeeded = (
+            result.returncode == 0
+            and self.preview_path.exists()
+            and self.preview_path.stat().st_size > 0
+        )
+
+        if not conversion_succeeded:
+            self.preview_path.unlink(missing_ok=True)
+
+            os.replace(
+                self.raw_preview_path,
+                self.preview_path,
+            )
+            return
+
+        self.raw_preview_path.unlink(missing_ok=True)
 
     def _maybe_write_evidence(
         self,

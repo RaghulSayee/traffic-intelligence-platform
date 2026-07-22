@@ -1,0 +1,90 @@
+services:
+  - type: web
+    name: traffic-intelligence-platform
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/ready
+    maxShutdownDelaySeconds: 60
+
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+      - key: NODE_ENV
+        value: production
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: traffic-intelligence-db
+          property: connectionString
+
+      - key: JWT_SECRET_KEY
+        generateValue: true
+
+      - key: JWT_ALGORITHM
+        value: HS256
+
+      - key: JWT_ACCESS_TOKEN_MINUTES
+        value: "480"
+
+      - key: BACKEND_INTERNAL_API_KEY
+        generateValue: true
+
+      - key: BACKEND_API_BASE_URL
+        value: http://127.0.0.1:8000/api/v1
+
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: /api/v1
+
+      - key: CORS_ALLOWED_ORIGINS
+        value: ""
+
+      - key: VIDEO_STORAGE_PATH
+        value: /tmp/traffic-intelligence/videos
+
+      - key: EVIDENCE_STORAGE_PATH
+        value: /tmp/traffic-intelligence/evidence
+
+      - key: MAX_VIDEO_UPLOAD_MB
+        value: "100"
+
+      - key: DETECTOR_DEVICE
+        value: cpu
+
+      - key: DETECTOR_MODEL_PATH
+        value: yolo26n.pt
+
+      - key: DETECTOR_FRAME_STRIDE
+        value: "2"
+
+      - key: TRAFFIC_LIGHT_DOMINANCE_RATIO
+        value: "1.15"
+
+      - key: TRAFFIC_LIGHT_CONFIRMATION_FRAMES
+        value: "2"
+
+      - key: TRAFFIC_LIGHT_MAXIMUM_UNKNOWN_FRAMES
+        value: "12"
+
+      - key: RED_LIGHT_MINIMUM_SIGNAL_CONFIDENCE
+        value: "0.45"
+
+      - key: RUN_VIDEO_WORKER
+        value: "true"
+
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+
+      - key: INITIAL_ADMIN_FULL_NAME
+        value: Raghul Sayee
+
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: traffic-intelligence-db
+    plan: free
+    databaseName: traffic_intelligence
+    user: traffic_user

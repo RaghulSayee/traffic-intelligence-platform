@@ -12,11 +12,19 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
 
+    cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     database_url: str = (
         "postgresql+asyncpg://traffic_user:"
         "traffic_password@localhost:5432/traffic_intelligence"
     )
     database_echo: bool = False
+
+    jwt_secret_key: str = "development-only-change-before-deployment"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_minutes: int = 480
+    auth_cookie_name: str = "traffic_access_token"
+    backend_internal_api_key: str = "development-only-internal-api-key"
 
     video_storage_path: Path = Path("storage/videos")
     max_video_upload_mb: int = 500
@@ -117,6 +125,18 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @property
+    def parsed_cors_allowed_origins(
+        self,
+    ) -> list[str]:
+        """Return configured browser origins."""
+
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+        ]
 
     @property
     def max_video_upload_bytes(self) -> int:

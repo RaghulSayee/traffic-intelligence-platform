@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import WorkerLostLeaseError
@@ -40,6 +40,48 @@ class ProcessingJobRepository:
             ProcessingJob,
             job_id,
         )
+
+    async def list_jobs(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        status: ProcessingJobStatus | None,
+        video_id: UUID | None,
+    ) -> tuple[list[ProcessingJob], int]:
+        """Return processing jobs using filters."""
+
+        filters = []
+
+        if status is not None:
+            filters.append(ProcessingJob.status == status)
+
+        if video_id is not None:
+            filters.append(ProcessingJob.video_id == video_id)
+
+        count_statement = select(func.count()).select_from(ProcessingJob)
+
+        list_statement = (
+            select(ProcessingJob)
+            .order_by(ProcessingJob.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        if filters:
+            count_statement = count_statement.where(*filters)
+
+            list_statement = list_statement.where(*filters)
+
+        count_result = await self.session.execute(count_statement)
+
+        list_result = await self.session.execute(list_statement)
+
+        total = int(count_result.scalar_one())
+
+        jobs = list(list_result.scalars().all())
+
+        return jobs, total
 
     async def recover_expired_jobs(
         self,

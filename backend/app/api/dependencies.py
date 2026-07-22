@@ -14,6 +14,7 @@ from app.media.metadata import (
     VideoMetadataExtractor,
 )
 from app.services.processing_job import ProcessingJobService
+from app.services.video import VideoQueryService
 from app.services.video_ingestion import VideoIngestionService
 from app.storage.base import VideoStorage
 from app.storage.local import LocalVideoStorage
@@ -81,6 +82,26 @@ def get_video_ingestion_service(
 VideoIngestionServiceDependency = Annotated[
     VideoIngestionService,
     Depends(get_video_ingestion_service),
+]
+
+
+def get_video_query_service(
+    session: DatabaseSession,
+) -> VideoQueryService:
+    """Construct a video query service."""
+
+    settings = get_settings()
+
+    return VideoQueryService(
+        session=session,
+        storage=get_video_storage(),
+        evidence_root=settings.evidence_storage_path,
+    )
+
+
+VideoQueryServiceDependency = Annotated[
+    VideoQueryService,
+    Depends(get_video_query_service),
 ]
 
 
